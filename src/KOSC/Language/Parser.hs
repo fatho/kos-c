@@ -1,4 +1,4 @@
-module KOSC.Parser where
+module KOSC.Language.Parser where
 
 import Text.Trifecta
 import Text.Parser.Combinators
@@ -11,7 +11,7 @@ import qualified Text.Parser.Token.Highlight as H
 import           Text.Parser.Token.Style
 import           Text.Trifecta
 
-import KOSC.AST
+import KOSC.Language.AST
 
 -- * Expression Parser
 
@@ -22,7 +22,7 @@ varStyle = IdentifierStyle
             , _styleStart     = letter
             , _styleLetter    = alphaNum <|> oneOf "_"
             , _styleReserved = HS.fromList
-                [ "return", "record", "module", "import", "as", "unqualified", "builtin", "structure" ]
+                [ "return", "record", "module", "import", "as", "unqualified", "builtin", "structure", "get", "set" ]
             , _styleHighlight = H.Identifier
             , _styleReservedHighlight = H.ReservedIdentifier
             }
@@ -40,19 +40,18 @@ opSym o = case o of
   OpDiv -> "/"
 
 -- | Parses a variable identifier.
-rawNameP :: (TokenParsing m, Monad m) => m RawName
+rawNameP ::  Parser RawName
 rawNameP = RawName <$> sepBy1 (ident varStyle) (symbol "::")
 
 -- | Parses a reserved identifier.
-reserved :: (TokenParsing m, Monad m) => String -> m ()
+reserved ::  String -> Parser ()
 reserved = reserve varStyle
 
 -- | Parses a reserved operator.
-reservedOp :: (TokenParsing m, Monad m) => String -> m ()
+reservedOp ::  String -> Parser ()
 reservedOp = reserve opStyle
 
-
-opTable :: (Monad m, TokenParsing m) => [[Operator m (Expr RawName)]]
+opTable :: [[Operator Parser (Expr RawName)]]
 opTable = [ map (entry AssocLeft) [OpMult, OpDiv]
           , map (entry AssocLeft) [OpPlus, OpMinus]
           ]
@@ -60,22 +59,22 @@ opTable = [ map (entry AssocLeft) [OpMult, OpDiv]
     entry a o = Infix (binOp o <$ reservedOp (opSym o)) a
     binOp o x y = EOp x o y
 
-exprP :: (TokenParsing m, Monad m) => m (Expr RawName)
+exprP ::  Parser (Expr RawName)
 exprP = buildExpressionParser opTable argP
 
-argP :: (TokenParsing m, Monad m) => m (Expr RawName)
+argP ::  Parser (Expr RawName)
 argP = choice [stringP, scalarP, unknownP, accessorChainP]
 
-stringP :: (TokenParsing m) => m (Expr RawName)
+stringP ::  Parser (Expr RawName)
 stringP = EString <$> stringLiteral
 
-scalarP :: (TokenParsing m) => m (Expr RawName)
+scalarP ::  Parser (Expr RawName)
 scalarP = EScalar . either fromIntegral id <$> integerOrDouble
 
-unknownP :: (TokenParsing m) => m (Expr RawName)
+unknownP ::  Parser (Expr RawName)
 unknownP = EUnknown <$ symbol "?"
 
-accessorChainP :: (TokenParsing m, Monad m) => m (Expr RawName)
+accessorChainP ::  Parser (Expr RawName)
 accessorChainP = do
   var <- rawNameP
   let chain inner = do
@@ -95,22 +94,22 @@ testExpr str = case parseString (exprP <* eof) mempty str of
 
 -- * Statement Parser
 
-stmtP :: (TokenParsing m, Monad m) => m (Stmt RawName)
+stmtP ::  Parser (Stmt RawName)
 stmtP = (choice [stmtReturnP, try stmtDeclP, try stmtAssignP, stmtExprP] <* semi) <|> stmtBlockP
 
-stmtDeclP :: (TokenParsing m, Monad m) => m (Stmt RawName)
+stmtDeclP ::  Parser (Stmt RawName)
 stmtDeclP = SDeclVar <$> typeP <*> ident varStyle <* symbol "=" <*> exprP
 
-stmtAssignP :: (TokenParsing m, Monad m) => m (Stmt RawName)
+stmtAssignP ::  Parser (Stmt RawName)
 stmtAssignP = SAssign <$> exprP <* symbol "=" <*> exprP
 
-stmtExprP :: (TokenParsing m, Monad m) => m (Stmt RawName)
+stmtExprP ::  Parser (Stmt RawName)
 stmtExprP = SExpr <$> exprP
 
-stmtReturnP :: (TokenParsing m, Monad m) => m (Stmt RawName)
+stmtReturnP ::  Parser (Stmt RawName)
 stmtReturnP = SReturn <$> (reserved "return" *> exprP)
 
-stmtBlockP :: (TokenParsing m, Monad m) => m (Stmt RawName)
+stmtBlockP ::  Parser (Stmt RawName)
 stmtBlockP = SBlock <$> braces (many stmtP)
 
 testStmt :: String -> (Stmt RawName)
@@ -120,55 +119,70 @@ testStmt str = case parseString (stmtP <* eof) mempty str of
 
 -- * Declaration Parser
 
-moduleNameP :: (TokenParsing m, Monad m) => m ModuleName
-moduleNameP = sepBy1 (ident varStyle) (symbol "::")
+moduleNameP ::  Parser ModuleName
+moduleNameP = ModuleName <$> sepBy1 (ident varStyle) (symbol "::")
 
-moduleP :: (TokenParsing m, Monad m) => m (Module RawName)
+moduleP ::  Parser (Module RawName)
 moduleP = Module <$> (reserved "module" *> moduleNameP <* symbol ";") <*> many declP
 
-declP :: (TokenParsing m, Monad m) => m (Decl RawName)
-declP = choice [DeclImport <$> importDeclP, DeclFun <$> funDeclP, DeclBuiltin <$> builtinDeclP]
+declP ::  Parser (Decl RawName)
+declP = choice [DeclImport <$> importDeclP, DeclFun <$> funDeclP, DeclBuiltin <$> builtinP]
 
-importDeclP :: (TokenParsing m, Monad m) => m ImportDecl
+importDeclP ::  Parser ImportDecl
 importDeclP = ImportDecl <$> (reserved "import" *> moduleNameP)
   <*> optional (reserved "as" *> moduleNameP)
   <*> option False (True <$ reserved "unqualified")
   <* semi
 
-visibilityP :: (TokenParsing m, Monad m) => m Visibility
+visibilityP ::  Parser Visibility
 visibilityP = choice [Public <$ reserved "public", Private <$ reserved "private" ]
 
-funDeclP :: (TokenParsing m, Monad m) => m (FunDecl RawName)
-funDeclP = FunDecl <$> option Public visibilityP
+funSigP ::  Parser (FunSig RawName)
+funSigP = FunSig <$> option Public visibilityP
            <*> typeP  -- return type
            <*> ident varStyle -- name
            <*> option [] (angles $ commaSep $ ident varStyle) -- generic parameters
            <*> parens (commaSep paramP) -- parameters
-           <*> braces (many stmtP) -- body
 
-paramP :: (TokenParsing m, Monad m) => m (Param RawName)
+varSigP ::  Parser (VarSig RawName)
+varSigP = VarSig <$> option Public visibilityP
+           <*> typeP
+           <*> ident varStyle
+           <*> accessibilityP
+
+
+indexSigP ::  Parser (IndexSig RawName)
+indexSigP = IndexSig <$> option Public visibilityP
+           <*> typeP
+           <* symbol "[" <*> typeP <*> ident varStyle <* symbol "]"
+           <*> accessibilityP
+
+fieldSigP ::  Parser (FieldSig RawName)
+fieldSigP = (FieldFunSig <$> try funSigP) <|> (FieldVarSig <$> try varSigP) <|> (FieldIndexSig <$> indexSigP)
+
+structSigP ::  Parser (StructSig RawName)
+structSigP = StructSig <$> option Public visibilityP
+  <*> (reserved "structure" *> ident varStyle)
+  <*> option [] (angles $ commaSep1 $ ident varStyle)
+  <*> optional (colon *> typeP)
+  <*> braces (many (fieldSigP <* semi))
+
+funDeclP ::  Parser (FunDecl RawName)
+funDeclP = FunDecl <$> funSigP <*> braces (many stmtP) -- body
+
+paramP ::  Parser (Param RawName)
 paramP = Param <$> typeP <*> ident varStyle <*> optional (symbol "=" *> exprP)
 
-typeP :: (TokenParsing m, Monad m) => m (Type RawName)
+typeP ::  Parser (Type RawName)
 typeP = mk <$> rawNameP <*> optional (angles $ commaSep typeP) where
   mk v Nothing = TypeName v
   mk v (Just args) = TypeGeneric v args
 
-builtinDeclP :: (TokenParsing m, Monad m) => m (BuiltinDecl RawName)
-builtinDeclP = BuiltinDecl <$> (reserved "builtin" *> optional stringLiteral) <*> option Public visibilityP <*> builtinP
+accessibilityP ::  Parser Accessibility
+accessibilityP = option GetOrSet $ (Get <$ reserved "get") <|> (Set <$ reserved "set")
 
-builtinP :: (TokenParsing m, Monad m) => m (Builtin RawName)
-builtinP = (BuiltinStruct <$> builtinStructP) <|> (BuiltinFun <$> builtinFunP) where
-  builtinStructP = BuiltinStructDef <$> (reserved "structure" *> ident varStyle)
-                   <*> option [] (angles $ commaSep1 $ ident varStyle)
-                   <*> optional (colon *> typeP)
-                   -- TODO: add fields to builtin structures
-                   <* braces whiteSpace
-  builtinFunP = BuiltinFunDef <$> typeP <*> ident varStyle
-    <*> option [] (angles $ commaSep $ ident varStyle) -- generic parameters
-    <*> parens (commaSep paramP)
-    <* semi
-
+builtinP ::  Parser (Builtin RawName)
+builtinP = reserved "builtin" >> (BuiltinStruct <$> structSigP) <|> (BuiltinFun <$> funSigP) <|> (BuiltinVar <$> varSigP)
 
 testModule :: String -> (Module RawName)
 testModule str = case parseString (moduleP <* eof) mempty str of

@@ -1,6 +1,6 @@
 module Examples::AutoPilot;
 
-import Examples::Builtin unqualified;
+import Builtin unqualified;
 
 public Void Init() {
 

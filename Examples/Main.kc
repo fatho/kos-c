@@ -1,6 +1,6 @@
 module Examples::Main;
 
-import Examples::Builtin unqualified;
+import Builtin unqualified;
 
 import Examples::AutoPilot as AP;
 
@@ -13,4 +13,5 @@ public Void Main() {
   }
   z = 2;
   AP::Init();
+  AP::Stop();
 }

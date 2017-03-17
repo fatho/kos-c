@@ -15,9 +15,13 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     KOSC.AST
-                       KOSC.Parser
-                       KOSC.Compiler
+  exposed-modules:     KOSC.Language.AST
+                       KOSC.Language.Parser
+                       KOSC.Compiler.Common
+                       KOSC.Compiler.Monad
+                       KOSC.Compiler.Errors
+                       KOSC.Compiler.ImportResolution
+                       KOSC.Compiler.ScopeChecker
   build-depends:       base >= 4.7 && < 5
                      , ansi-wl-pprint
                      , trifecta

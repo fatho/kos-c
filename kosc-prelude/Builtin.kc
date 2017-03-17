@@ -1,0 +1,16 @@
+module Builtin;
+
+builtin structure Void {}
+
+builtin structure Structure {
+  String ToString();
+  String TypeName get;
+}
+
+builtin structure Scalar : Structure {}
+builtin structure String : Structure {}
+
+builtin structure Enumerable<A> : Structure {}
+builtin structure List<A> : Enumerable<A> {
+  A [Scalar index];
+}
