@@ -1,0 +1,10 @@
+module Examples::Builtin;
+
+builtin structure Void {}
+
+builtin structure Structure {}
+builtin structure Scalar : Structure {}
+builtin structure String : Structure {}
+
+builtin structure Enumerable<A> : Structure {}
+builtin structure List<A> : Enumerable<A> {}

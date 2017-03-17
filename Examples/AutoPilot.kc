@@ -1,0 +1,7 @@
+module Examples::AutoPilot;
+
+import Examples::Builtin unqualified;
+
+public Void Init() {
+
+}

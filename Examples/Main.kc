@@ -1,0 +1,16 @@
+module Examples::Main;
+
+import Examples::Builtin unqualified;
+
+import Examples::AutoPilot as AP;
+
+public Void Main() {
+  Scalar x = 3;
+  Scalar y = 2;
+  y = x * y;
+  {
+    Scalar z = y + 1;
+  }
+  z = 2;
+  AP::Init();
+}
