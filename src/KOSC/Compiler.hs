@@ -30,6 +30,7 @@ import qualified KOSC.Language.Parser           as Parser
 import           KOSC.Compiler.Common
 import           KOSC.Compiler.ImportResolution
 import           KOSC.Compiler.ScopeChecker
+import           KOSC.Compiler.TypeChecker
 
 import           Debug.Trace
 
@@ -44,6 +45,7 @@ compile hooks mainModule = do
   imports <- resolveImports (resolveImport hooks) mainModule
   scopedMods <- iforM (imports ^. importResolutionModules) $
                 \modName mod -> scopeChecker imports (mod ^. moduleInfoAST)
+  forM_ scopedMods $ \mod -> typeChecker scopedMods mod
   return scopedMods
 
 -- * File Based Compiler

@@ -4,14 +4,20 @@ import Builtin unqualified;
 
 import Examples::AutoPilot as AP;
 
+public A Id<A>(A x) {
+  return x;
+}
+
+public Scalar Add23(Scalar x, Scalar y, Scalar z = 0) {
+  return x + y + z;
+}
+
 public Void Main() {
   Scalar x = 3;
-  Scalar y = 2;
+  Scalar y = Id<Scalar>(2);
   y = x * y;
   {
-    Scalar z = y + 1;
+    Scalar z = Add23(y + 1, 2, 3, 4);
   }
-  z = 2;
   AP::Init();
-  AP::Stop();
 }

@@ -50,9 +50,11 @@ data ScopedTermExport = ScopedFun (AST.FunSig AST.ScopedName) | ScopedVar (AST.V
 -- | A scoped module with extra information populated by the scope checker.
 data ScopedModule = ScopedModule
   { _scopedModuleAST   :: AST.Module AST.ScopedName
-  , _scopedModuleTypes :: Map AST.Ident ScopedTypeExport
-  , _scopedModuleVars  :: Map AST.Ident ScopedTermExport
+  , _scopedModuleTypes :: Map AST.ScopedName ScopedTypeExport
+  , _scopedModuleVars  :: Map AST.ScopedName ScopedTermExport
   } deriving (Read, Show)
+
+makeLenses ''ScopedModule
 
 instance Monoid Scope where
   mempty = Scope Map.empty Map.empty
@@ -63,6 +65,8 @@ makeLenses ''Scope
 -- | Resolves all references in a module to module-qualified names
 scopeChecker :: Monad m => ImportResolution -> AST.RawModule -> KOSCCompilerT m ScopedModule
 scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
+  inputModuleName = view AST.moduleName inputMod
+
   initialScope = do
     -- list of all imported modules, and the current module itself
     let imported = (AST.ImportDecl (view AST.moduleName inputMod) Nothing True)
@@ -96,8 +100,10 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
 
   checkedMod = enterModule (view AST.moduleName inputMod) $ do
     scopedAST <- mapMOf (AST.declarations . traversed) checkDecl inputMod
-    let typeExports = Map.fromList $ concatMap scopedTypeExport $ view AST.declarations scopedAST
-        termExports = Map.fromList $ concatMap scopedTermExport $ view AST.declarations scopedAST
+    let typeExports = Map.fromList $ over (traversed . _1) (makeGlobalName inputModuleName)
+          $ concatMap scopedTypeExport $ view AST.declarations scopedAST
+        termExports = Map.fromList $ over (traversed . _1) (makeGlobalName inputModuleName)
+          $ concatMap scopedTermExport $ view AST.declarations scopedAST
     return $ ScopedModule scopedAST typeExports termExports
 
   scopedTypeExport (AST.DeclImport _) = []
@@ -169,9 +175,21 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
   checkFunSig (AST.FunSig vis ret name gen params) = enterDecl name $ do
     insertGenerics gen
     ret' <- checkType ret
+    checkOptParams params
+    -- find duplicate parameter names
+    let pnames = map (view AST.paramName) params
+        pdupl = nub $ pnames \\ nub pnames
+    forM_ pdupl $ \p -> messageWithContext MessageError $ MessageDuplicateParameter p
     params' <- mapM checkParam params
     insertLocalVars (map (view AST.paramName) params)
     return $ AST.FunSig vis ret' name gen params'
+
+  -- checks whether all optional parameters occur at the end of the parameter list
+  checkOptParams (p1 : p2 : ps) = do
+    when (has (AST.paramOpt . _Just) p1 && has (AST.paramOpt . _Nothing) p2) $
+      messageWithContext MessageError $ MessageMandatoryAfterOptional (p2 ^. AST.paramName)
+    checkOptParams (p2 : ps)
+  checkOptParams _ = pure ()
 
   -- checks a structure signature
   checkStructSig (AST.StructSig vis name gen deriv fields) = localScope $ enterDecl name $ do

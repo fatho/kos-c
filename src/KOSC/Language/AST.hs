@@ -56,6 +56,7 @@ data Type name
   | TypeFunction (Type name) [Type name] [Type name] -- ^ function type with parameters and optional parameters separated
   deriving (Read, Show)
 
+-- | Describes a function parameter.
 data Param name = Param { _paramType :: Type name, _paramName :: Ident, _paramOpt :: Maybe (Expr name) }
   deriving (Read, Show)
 
@@ -162,3 +163,22 @@ instance PP.Pretty ScopedName where
   pretty (ScopedGlobal parts) = PP.text $ intercalate "::" parts
   pretty (ScopedLocal loc) = PP.text loc
   pretty (ScopedAmbiguous parts) = PP.hcat (PP.punctuate (PP.comma PP.<> PP.space) (map (PP.text . intercalate "::") parts))
+
+instance PP.Pretty name => PP.Pretty (Type name) where
+  pretty (TypeName n) = PP.pretty n
+  pretty (TypeGeneric n args) = PP.pretty n PP.<> PP.tupled (map PP.pretty args)
+  pretty (TypeFunction ret args opts) = PP.pretty ret PP.<> PP.tupled (map PP.pretty args) PP.<> PP.list (map PP.pretty opts)
+
+-- * Helper Functions
+
+isOptional :: Param name -> Bool
+isOptional = has $ paramOpt . _Just
+
+isMandatory :: Param name -> Bool
+isMandatory = not . isOptional
+
+isArithmeticOp :: Op -> Bool
+isArithmeticOp OpPlus = True
+isArithmeticOp OpMinus = True
+isArithmeticOp OpMult = True
+isArithmeticOp OpDiv = True
