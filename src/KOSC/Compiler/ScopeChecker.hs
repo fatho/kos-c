@@ -39,6 +39,21 @@ data Scope = Scope
   , _typeScope :: Map AST.RawName AST.ScopedName -- ^ unqualified type identifiers in scope
   }
 
+-- | Scoped, exported type.
+data ScopedTypeExport = ScopedStruct (AST.StructSig AST.ScopedName)
+  deriving (Read, Show)
+
+-- | Scoped, exported variable or function.
+data ScopedTermExport = ScopedFun (AST.FunSig AST.ScopedName) | ScopedVar (AST.VarSig AST.ScopedName)
+  deriving (Read, Show)
+
+-- | A scoped module with extra information populated by the scope checker.
+data ScopedModule = ScopedModule
+  { _scopedModuleAST   :: AST.Module AST.ScopedName
+  , _scopedModuleTypes :: Map AST.Ident ScopedTypeExport
+  , _scopedModuleVars  :: Map AST.Ident ScopedTermExport
+  } deriving (Read, Show)
+
 instance Monoid Scope where
   mempty = Scope Map.empty Map.empty
   mappend (Scope te1 ty1) (Scope te2 ty2) = Scope (te1 <> te2) (ty1 <> ty2)
@@ -46,7 +61,7 @@ instance Monoid Scope where
 makeLenses ''Scope
 
 -- | Resolves all references in a module to module-qualified names
-scopeChecker :: Monad m => ImportResolution -> AST.RawModule -> KOSCCompilerT m (AST.Module AST.ScopedName)
+scopeChecker :: Monad m => ImportResolution -> AST.RawModule -> KOSCCompilerT m ScopedModule
 scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
   initialScope = do
     -- list of all imported modules, and the current module itself
@@ -79,8 +94,24 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
             uqualTypeMap = if unqualified then Map.fromList [ (AST.RawName [n], makeGlobalName importedName n) | n <- defTypes ] else Map.empty
         return $ Scope (Map.unionWith (<>) qualTermMap uqualTermMap) (Map.unionWith (<>) qualTypeMap uqualTypeMap)
 
-  checkedMod = enterModule (view AST.moduleName inputMod) $
-    mapMOf (AST.declarations . traversed) checkDecl inputMod
+  checkedMod = enterModule (view AST.moduleName inputMod) $ do
+    scopedAST <- mapMOf (AST.declarations . traversed) checkDecl inputMod
+    let typeExports = Map.fromList $ concatMap scopedTypeExport $ view AST.declarations scopedAST
+        termExports = Map.fromList $ concatMap scopedTermExport $ view AST.declarations scopedAST
+    return $ ScopedModule scopedAST typeExports termExports
+
+  scopedTypeExport (AST.DeclImport _) = []
+  scopedTypeExport (AST.DeclFun _) = []
+  scopedTypeExport (AST.DeclBuiltin bi) = case bi of
+    AST.BuiltinStruct sig -> [(sig ^. AST.structSigName, ScopedStruct sig)]
+    _ -> []
+
+  scopedTermExport (AST.DeclImport _) = []
+  scopedTermExport (AST.DeclFun (AST.FunDecl fsig _)) = [(fsig ^. AST.funSigName, ScopedFun fsig)]
+  scopedTermExport (AST.DeclBuiltin bi) = case bi of
+    AST.BuiltinFun fsig -> [(fsig ^. AST.funSigName,  ScopedFun fsig)]
+    AST.BuiltinVar vsig -> [(vsig ^. AST.varSigName,  ScopedVar vsig)]
+    _ -> []
 
   checkDecl (AST.DeclImport i) = pure (AST.DeclImport i)
   checkDecl (AST.DeclFun fd) = AST.DeclFun <$> checkFun fd

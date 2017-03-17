@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE TemplateHaskell       #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-| Main entry point of the compiler. -}
@@ -8,42 +9,42 @@ module KOSC.Compiler where
 
 import           Control.Lens
 import           Control.Monad.Except
-import           Control.Monad.State
 import           Control.Monad.Reader
+import           Control.Monad.State
 import           Data.Foldable
-import           Data.Semigroup
 import           Data.List
+import           Data.Map.Strict                (Map)
+import qualified Data.Map.Strict                as Map
 import           Data.Maybe
-import           Data.Map.Strict              (Map)
-import qualified Data.Map.Strict              as Map
-import           Data.Set                     (Set)
-import qualified Data.Set                     as Set
+import           Data.Semigroup
+import           Data.Set                       (Set)
+import qualified Data.Set                       as Set
 import           System.Directory
 import           System.FilePath
-import qualified Text.PrettyPrint.ANSI.Leijen as PP
-import qualified Text.Trifecta                as Trifecta
+import qualified Text.PrettyPrint.ANSI.Leijen   as PP
+import qualified Text.Trifecta                  as Trifecta
 
-import qualified KOSC.Language.AST                     as AST
-import qualified KOSC.Language.Parser                  as Parser
+import qualified KOSC.Language.AST              as AST
+import qualified KOSC.Language.Parser           as Parser
 
-import KOSC.Compiler.Common
-import KOSC.Compiler.ImportResolution
-import KOSC.Compiler.ScopeChecker
+import           KOSC.Compiler.Common
+import           KOSC.Compiler.ImportResolution
+import           KOSC.Compiler.ScopeChecker
 
-import Debug.Trace
+import           Debug.Trace
 
 data CompilerHooks m = CompilerHooks
   { resolveImport :: AST.ModuleName -> KOSCCompilerT m AST.RawModule
   }
 
 -- | Compiles a program given by a main module.
-compile :: Monad m => CompilerHooks m -> AST.Module AST.RawName -> KOSCCompilerT m ()
+compile :: Monad m => CompilerHooks m -> AST.Module AST.RawName -> KOSCCompilerT m (Map AST.ModuleName ScopedModule)
 compile hooks mainModule = do
   let mainModuleName = view AST.moduleName mainModule
   imports <- resolveImports (resolveImport hooks) mainModule
   scopedMods <- iforM (imports ^. importResolutionModules) $
                 \modName mod -> scopeChecker imports (mod ^. moduleInfoAST)
-  return ()
+  return scopedMods
 
 -- * File Based Compiler
 
@@ -79,7 +80,7 @@ fileSystemImportResolver searchPath modName = do
   return mod
 
 -- | Compiles a program from a file.
-compileFile :: FileBasedCompilerOptions -> FilePath -> IO (Either KOSCMessage (), [KOSCMessage])
+compileFile :: FileBasedCompilerOptions -> FilePath -> IO (Either KOSCMessage _, [KOSCMessage])
 compileFile opts filename = runCompilerT $ do
   mainmod <- parseModuleFile filename
   basePath <- liftIO $ getCurrentDirectory
