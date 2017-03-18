@@ -1,6 +1,8 @@
 module Examples::Main;
 
-import Builtin unqualified;
+import KOS::Builtin unqualified;
+import KOS::Collections unqualified;
+import KOS::Math unqualified;
 
 import Examples::AutoPilot as AP;
 
@@ -45,6 +47,11 @@ public Void Main() {
   someList.Add(1);
   someList.Add(2);
   ForEach<Scalar>(someList, Dummy);
+
+  Vector v1 = V(1,2,3);
+  Vector v2 = V(0,0,1);
+  Vector v3 = v1 + v2;
+  Scalar d = v1 * v3;
 
   AP::Init();
 }

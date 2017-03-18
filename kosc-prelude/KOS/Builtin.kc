@@ -1,0 +1,33 @@
+/** Contains the fundamental types needed for correctly compiling and type checking KOS-C files.
+ *  Apart from the module specifiers, these use the same names as KOS uses.
+ */
+module KOS::Builtin;
+
+/** The void type is used to signify functions that do not return anything.
+ *  It is therefore no sub-type of structure, unlike most other types.
+ */
+builtin structure Void {}
+
+/** Structure is the base type of all KOS structures
+ */
+builtin structure Structure {
+  String ToString();
+  Boolean HasSuffix(String name);
+  Boolean IsSerializable get;
+  String TypeName get;
+  Boolean IsType(String name);
+  String Inheritance get;
+}
+
+/// Number type. This is the type assigned to scalar literals.
+builtin structure Scalar : Structure {}
+
+/// This is the type assigned to string literals.
+builtin structure String : Structure {}
+
+/// This is the type if/until/etc. conditions are checked against.
+builtin structure Boolean : Structure {}
+
+builtin Boolean True get;
+builtin Boolean False get;
+

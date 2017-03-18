@@ -44,8 +44,10 @@ compile :: Monad m => CompilerHooks m -> AST.Module AST.RawName -> KOSCCompilerT
 compile hooks mainModule = do
   let mainModuleName = view AST.moduleName mainModule
   imports <- resolveImports (resolveImport hooks) mainModule
+  cancelIfErrorneous $ MessageUnspecified $ PP.text "Failed to resolve imports."
   scopedMods <- iforM (imports ^. importResolutionModules) $
                 \modName mod -> scopeChecker imports (mod ^. moduleInfoAST)
+  cancelIfErrorneous $ MessageUnspecified $ PP.text "Cannot type check without successfully completing scope checking."
   typedMods <- forM scopedMods $ \mod -> typeChecker scopedMods mod
   cancelIfErrorneous $ MessageUnspecified $ PP.text "Cannot generate code with errors."
   codeGen typedMods (view AST.moduleName mainModule)

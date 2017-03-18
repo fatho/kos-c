@@ -1,0 +1,87 @@
+/** This module provides the interface to the KOS collections.
+ *  A major difference is that all collections are now parameterized over the type of elements they contain.
+ */
+module KOS::Collections;
+
+import KOS::Builtin unqualified;
+
+builtin structure Iterator<A> : Structure {
+  Void Reset();
+  Boolean Next();
+  Boolean AtEnd;
+  Scalar Index get;
+  A Value get;
+}
+
+// This type is required for type checking for-each statements.
+builtin structure Enumerable<A> : Structure {
+  Iterator<A> Iterator get;
+  Iterator<A> ReverseIterator get;
+  Scalar Length get;
+  Boolean Contains(A item);
+  Boolean Empty get;
+  String Dump();
+}
+
+builtin structure List<A> : Enumerable<A> {
+  A [Scalar index];
+  Void Add(A item);
+  Void Insert(Scalar index, A item);
+  Void Remove(Scalar index);
+  Void Clear();
+  List<A> Copy();
+  List<A> SubList(Scalar index, Scalar length);
+  String Join(String separator);
+}
+
+// TODO: implement varargs for this function in order to construct lists
+/// can only construct the empty list currently
+builtin List<A> List<A>();
+
+builtin structure Lexicon<K, V> : Structure {
+  V [K key];
+  Void Add(K key, V value);
+  Boolean CaseSensitive;
+  Boolean Case;
+  Void Clear();
+  Lexicon<K, V> Copy();
+  String Dump();
+  Boolean HasKey(K key);
+  Boolean HasValue(V value);
+  List<K> Keys();
+  List<V> Values();
+  Scalar Length get;
+  Void Remove(K key);
+}
+
+builtin structure Queue<A> : Enumerable<A> {
+  Void Push(A item);
+  A Pop();
+  A Peek();
+  Void Clear();
+  Queue<A> Copy();
+}
+
+builtin structure Stack<A> : Enumerable<A> {
+  Void Push(A item);
+  A Pop();
+  A Peek();
+  Void Clear();
+  Queue<A> Copy();
+}
+
+builtin structure Range : Enumerable<Scalar> {
+  Scalar Start get;
+  Scalar Stop get;
+  Scalar Step get;
+}
+
+// TODO: Implement something like overload resolution. For now, there is just the most general constructor available.
+builtin Range Range(Scalar start, Scalar stop, Scalar step);
+
+builtin structure UniqueSet<A> : Enumerable<A> {
+  Void Add(A item);
+  Void Remove(A item);
+  Void Clear();
+  UniqueSet<A> Copy();
+}

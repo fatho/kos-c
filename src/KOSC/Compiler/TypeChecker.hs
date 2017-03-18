@@ -85,15 +85,25 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
         requireType (TypeScheme [] reqIdxTy AST.Get) indexTy
         return (AST.EIndex e' (Just indexedTy) eidx', TypeScheme [] idxRet idxAccess)
       _ -> return (AST.EIndex e' (Just unknownType) eidx', TypeScheme [] unknownType idxAccess)
-  inferExpr (AST.EOp e1 op e2)
-    | AST.isArithmeticOp op = do
-        (e1', ty1) <- inferExpr e1
-        (e2', ty2) <- inferExpr e2
-        let getscalar = TypeScheme [] scalarType AST.Get
-        requireType getscalar ty1
-        requireType getscalar ty2
-        return (AST.EOp e1' op e2', getscalar)
-    | otherwise = error "not implemented yet" --return (AST.EOp e1 op e2, TypeScheme [] unknownType AST.GetOrSet)
+  inferExpr (AST.EOp e1 op e2) = do
+    (e1', ts@(TypeScheme _ ty1 acc1)) <- inferExpr e1
+    (e2', ts@(TypeScheme _ ty2 acc2)) <- inferExpr e2
+    requireAccess AST.Get acc1
+    requireAccess AST.Get acc2
+    case findOp op ty1 ty2 of
+      Nothing -> do
+        messageWithContext MessageError $ MessageUnspecified $ PP.text "No matching operator found."
+        return (AST.EOp e1' op e2', TypeScheme [] unknownType AST.Get)
+      Just retTy -> return (AST.EOp e1' op e2', TypeScheme [] retTy AST.Get)
+  inferExpr (AST.EUnOp op e) = do
+    (e', ty) <- inferExpr e
+    case op of
+      AST.UnOpNegate -> do
+        requireType (TypeScheme [] scalarType AST.Get) ty
+        return (AST.EUnOp op e', TypeScheme [] scalarType AST.Get)
+      AST.UnOpNot -> do
+        requireType (TypeScheme [] boolType AST.Get) ty
+        return (AST.EUnOp op e', TypeScheme [] boolType AST.Get)
   inferExpr (AST.ECall f tyargs args) = do
     -- infer type of the called function
     (f', TypeScheme generics ty access) <- inferExpr f
@@ -207,11 +217,28 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
 
   -- predefined types
   -- FIXME: make it so that these do not require a hard-coded type name
-  scalarType = AST.TypeGeneric (AST.ScopedGlobal ["Builtin", "Scalar"]) []
-  stringType = AST.TypeGeneric (AST.ScopedGlobal ["Builtin", "String"]) []
-  boolType = AST.TypeGeneric (AST.ScopedGlobal ["Builtin", "Boolean"]) []
-  enumerableType a = AST.TypeGeneric (AST.ScopedGlobal ["Builtin", "Enumerable"]) [a]
+  scalarType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Builtin", "Scalar"]) []
+  stringType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Builtin", "String"]) []
+  boolType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Builtin", "Boolean"]) []
+  vectorType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Math", "Vector"]) []
+  enumerableType a = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Collections", "Enumerable"]) [a]
   unknownType = AST.TypeGeneric (AST.ScopedLocal "__UNKNOWN__") []
+
+  operatorOverloads binOp = case binOp of
+    AST.BinOpPlus -> [(scalarType, scalarType, scalarType)
+                     ,(vectorType, vectorType, vectorType)]
+    AST.BinOpMinus -> [(scalarType, scalarType, scalarType)
+                     ,(vectorType, vectorType, vectorType)]
+    AST.BinOpMult -> [(scalarType, scalarType, scalarType)
+                     ,(vectorType, vectorType, scalarType)
+                     ,(vectorType, scalarType, scalarType)
+                     ,(scalarType, vectorType, vectorType)]
+    AST.BinOpDiv -> [(scalarType, scalarType, scalarType)
+                     ,(vectorType, scalarType, scalarType)
+                     ,(scalarType, vectorType, vectorType)]
+    AST.BinOpPow -> [(scalarType, scalarType, scalarType)]
+
+  findOp binOp ty1 ty2 = view _3 <$> find (\(a,b,_) -> a == ty1 && b == ty2) (operatorOverloads binOp)
 
   -- saves current type environment and restores it on exit
   enterScope action = do
@@ -273,7 +300,7 @@ requireType (TypeScheme gen1 ty1 acc1) (TypeScheme gen2 ty2 acc2)
     checkCast Covariant n1 args1 n2 args2 = (n2, args2) `isSubtypeOf` (n1, args1)
     checkCast Contravariant n1 args1 n2 args2 = (n1, args1) `isSubtypeOf` (n2, args2)
 
-isSubtypeOf :: Monad m => (AST.ScopedName, [AST.Type AST.ScopedName]) -> (AST.ScopedName, [AST.Type AST.ScopedName]) -> StateT TypeEnv m Bool
+isSubtypeOf :: MonadCompiler MessageContent m => (AST.ScopedName, [AST.Type AST.ScopedName]) -> (AST.ScopedName, [AST.Type AST.ScopedName]) -> StateT TypeEnv m Bool
 isSubtypeOf (n1, tyargs1) (n2, tyargs2)
   | n1 == n2 && tyargs1 == tyargs2 = return True
   | otherwise = do
@@ -287,6 +314,7 @@ isSubtypeOf (n1, tyargs1) (n2, tyargs2)
               case ssig ^. AST.structSigSuper of -- try super structure
                 Just (AST.TypeGeneric nsuper argsSuper) -> isSubtypeOf (nsuper, map (substituteGenerics gensubst) argsSuper) (n2, tyargs2)
                 _ -> return False
+        Nothing -> criticalWithContext $ MessageUnspecified $ PP.text "Unknown type encountered during type checking:" PP.<+> PP.pretty n1 PP.<+> PP.text "This is a bug."
 
 
 buildFunctionEnv :: Monad m => AST.FunSig AST.ScopedName -> StateT TypeEnv m ()

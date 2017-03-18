@@ -1,0 +1,52 @@
+module KOS::Math;
+
+import KOS::Builtin unqualified;
+
+builtin structure Vector : Structure {
+  Scalar X;
+  Scalar Y;
+  Scalar Z;
+  Scalar Mag;
+  Vector Normalized get;
+  Scalar SqrMagnitude get;
+  Direction Direction;
+  Vector Vec get;
+}
+
+builtin Vector V(Scalar x, Scalar y, Scalar z);
+builtin Scalar vdot(Vector v1, Vector v2);
+builtin Vector vcrs(Vector v1, Vector v2);
+builtin Scalar vang(Vector v1, Vector v2);
+builtin Vector vxcl(Vector v1, Vector v2);
+
+builtin structure Direction : Structure {
+  Scalar Pitch get;
+  Scalar Yaw get;
+  Scalar Roll get;
+  Vector ForeVector get;
+  Vector TopVector get;
+  Vector StarVector get;
+  Direction Inverse get;
+}
+
+builtin Direction R(Scalar pitch, Scalar yaw, Scalar roll);
+builtin Direction Q(Scalar x, Scalar y, Scalar z, Scalar rot);
+builtin Direction Heading(Scalar dir, Scalar pitch);
+builtin Direction LookDirUp(Vector lookAt, Vector lookUp);
+builtin Direction AngleAxis(Scalar degrees, Vector axis);
+builtin Direction RotateFromTo(Vector from, Vector to);
+
+// TODO: move this into orbits package
+builtin structure GeoCoordinates {
+  Scalar Lat get;
+  Scalar Lng get;
+  Scalar Distance get;
+  Scalar TerrainHeight get;
+  Scalar Heading get;
+  Scalar Bearing get;
+  Vector Position get;
+  Vector AltitudePosition(Scalar alt);
+  // TODO: OrbitableVelocity
+}
+
+builtin GeoCoordinates LatLng(Scalar lat, Scalar lng);

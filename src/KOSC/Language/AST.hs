@@ -124,15 +124,19 @@ data RecDecl name = RecDecl
   , _recDeclVars       :: [VarSig name]
   } deriving (Read, Show)
 
-data Op = OpPlus | OpMinus | OpMult | OpDiv
-  deriving (Read, Show)
+data BinOp = BinOpPlus | BinOpMinus | BinOpMult | BinOpDiv | BinOpPow
+  deriving (Eq, Ord, Read, Show)
+
+data UnOp = UnOpNegate | UnOpNot
+  deriving (Eq, Ord, Show, Read)
 
 -- | Expressions (distinguishing between lvalues and rvalues is done at a later stage).
 data Expr name
   = EVar name
   | EAccessor (Expr name) (Maybe (Type name)) Ident
   | EIndex (Expr name) (Maybe (Type name)) (Expr name)
-  | EOp (Expr name) Op (Expr name)
+  | EOp (Expr name) BinOp (Expr name)
+  | EUnOp UnOp (Expr name)
   | ECall (Expr name) [Type name] [(Expr name)]
   | EScalar Double
   | EString String
@@ -198,11 +202,13 @@ isOptional = has $ paramOpt . _Just
 isMandatory :: Param name -> Bool
 isMandatory = not . isOptional
 
-isArithmeticOp :: Op -> Bool
-isArithmeticOp OpPlus  = True
-isArithmeticOp OpMinus = True
-isArithmeticOp OpMult  = True
-isArithmeticOp OpDiv   = True
+isArithmeticOp :: BinOp -> Bool
+isArithmeticOp BinOpPlus  = True
+isArithmeticOp BinOpMinus = True
+isArithmeticOp BinOpMult  = True
+isArithmeticOp BinOpDiv   = True
+isArithmeticOp BinOpPow   = True
+isArithmeticOp _ = False
 
 makeGlobalName :: ModuleName -> Ident -> ScopedName
 makeGlobalName modName ident = ScopedGlobal (moduleNameParts modName ++ [ident])

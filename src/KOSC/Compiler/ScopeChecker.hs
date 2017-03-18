@@ -67,7 +67,7 @@ scopeChecker :: Monad m => ImportResolution -> AST.RawModule -> KOSCCompilerT m 
 scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
   inputModuleName = view AST.moduleName inputMod
 
-  initialScope = do
+  initialScope = enterModule inputModuleName $ do
     -- list of all imported modules, and the current module itself
     let imported = (AST.ImportDecl (view AST.moduleName inputMod) Nothing True)
                    : [ decl | AST.DeclImport decl <- view AST.declarations inputMod ]
@@ -79,7 +79,7 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
         importedName = view AST.importModuleName importDecl
         modInfo' = imports ^. importResolutionModules . at importedName
     case modInfo' of
-      Nothing -> criticalWithContext $ MessageUnspecified $ PP.text "Tried to generate scope of non-imported module. This is likely a bug and should be fixed."
+      Nothing -> criticalWithContext $ MessageUnspecified $ PP.text "Tried to generate scope of non-imported module" PP.<+> PP.pretty importedName PP.<> PP.text ". This is likely a bug and should be fixed."
       Just modInfo -> do
         -- get exported term and type names of the given module
         let defTerms = Set.toList $ modInfo ^. moduleInfoExportedVars

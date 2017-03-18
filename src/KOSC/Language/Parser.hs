@@ -42,12 +42,18 @@ opStyle = emptyOps
   { _styleReserved = HS.fromList ["+", "-", "*", "/"]
   }
 
-opSym :: Op -> String
+opSym :: BinOp -> String
 opSym o = case o of
-  OpPlus  -> "+"
-  OpMinus -> "-"
-  OpMult  -> "*"
-  OpDiv   -> "/"
+  BinOpPlus  -> "+"
+  BinOpMinus -> "-"
+  BinOpMult  -> "*"
+  BinOpDiv   -> "/"
+  BinOpPow   -> "^"
+
+unOpSym :: UnOp -> String
+unOpSym o = case o of
+  UnOpNegate -> "-"
+  UnOpNot -> "!"
 
 -- | Parses a variable identifier.
 rawNameP :: KOSCParser RawName
@@ -62,12 +68,16 @@ reservedOp ::  String -> KOSCParser ()
 reservedOp = reserve opStyle
 
 opTable :: [[Operator KOSCParser (Expr RawName)]]
-opTable = [ map (entry AssocLeft) [OpMult, OpDiv]
-          , map (entry AssocLeft) [OpPlus, OpMinus]
+opTable = [ [entry AssocLeft BinOpPow]
+          , [preentry UnOpNegate, preentry UnOpNot]
+          , map (entry AssocLeft) [BinOpMult, BinOpDiv]
+          , map (entry AssocLeft) [BinOpPlus, BinOpMinus]
           ]
   where
     entry a o = Infix (binOp o <$ reservedOp (opSym o)) a
     binOp o x y = EOp x o y
+    preentry o = Prefix (unOp o <$ reservedOp (unOpSym o))
+    unOp o x = EUnOp o x
 
 exprP :: KOSCParser (Expr RawName)
 exprP = buildExpressionParser opTable accessorChainP
@@ -156,7 +166,7 @@ moduleNameP :: KOSCParser ModuleName
 moduleNameP = ModuleName <$> sepBy1 (ident varStyle) (symbol "::")
 
 moduleP :: KOSCParser (Module RawName)
-moduleP = Module <$> (reserved "module" *> moduleNameP <* symbol ";") <*> many declP
+moduleP = Module <$> (whiteSpace *> reserved "module" *> moduleNameP <* symbol ";") <*> many declP
 
 declP :: KOSCParser (Decl RawName)
 declP = choice [DeclImport <$> importDeclP, DeclRec <$> try recDeclP, DeclVar <$> try varDeclP, DeclFun <$> funDeclP, DeclBuiltin <$> builtinP]

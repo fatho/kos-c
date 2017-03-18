@@ -1,6 +1,6 @@
 module Examples::AutoPilot;
 
-import Builtin unqualified;
+import KOS::Builtin unqualified;
 
 record Options {
   Scalar cruiseSpeed;

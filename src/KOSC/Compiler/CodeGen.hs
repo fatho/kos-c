@@ -133,12 +133,13 @@ generateExpression e = go 0 e where
     | actualPrec < requiredPrec = [qq|($str)|]
     | otherwise = str
 
-  genOp :: AST.Op -> (L.Text, Int, Int, Int)
+  genOp :: AST.BinOp -> (L.Text, Int, Int, Int)
   genOp op = case op of
-        AST.OpPlus -> ("+", 6, 6, 7)
-        AST.OpMinus -> ("-", 6, 6, 7)
-        AST.OpMult -> ("*", 7, 7, 8)
-        AST.OpDiv -> ("/", 7, 7, 8)
+        AST.BinOpPlus -> ("+", 6, 6, 7)
+        AST.BinOpMinus -> ("-", 6, 6, 7)
+        AST.BinOpMult -> ("*", 7, 7, 8)
+        AST.BinOpDiv -> ("/", 7, 7, 8)
+        AST.BinOpPow -> ("^", 8, 8, 9)
 
   goStructAccessor outerPrec accessed field = do
     acode <- go 10 accessed
