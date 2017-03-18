@@ -30,7 +30,9 @@ varStyle = IdentifierStyle
             , _styleStart     = letter
             , _styleLetter    = alphaNum <|> oneOf "_"
             , _styleReserved = HS.fromList
-                [ "return", "record", "module", "import", "as", "unqualified", "builtin", "structure", "get", "set" ]
+                [ "return", "record", "module", "import", "as"
+                , "unqualified", "builtin", "structure", "get", "set"
+                , "until", "if", "else", "for" ]
             , _styleHighlight = H.Identifier
             , _styleReservedHighlight = H.ReservedIdentifier
             }
@@ -109,7 +111,8 @@ testExpr str = case parseString (runKOSCParser $ exprP <* eof) mempty str of
 -- * Statement Parser
 
 stmtP :: KOSCParser (Stmt RawName)
-stmtP = (choice [stmtReturnP, try stmtDeclP, try stmtAssignP, stmtExprP] <* semi) <|> stmtBlockP
+stmtP = choice [stmtIfP, stmtUntilP, stmtForEachP] <|>
+  (choice [stmtReturnP, try stmtDeclP, try stmtAssignP, stmtExprP] <* semi) <|> stmtBlockP
 
 stmtDeclP :: KOSCParser (Stmt RawName)
 stmtDeclP = SDeclVar <$> typeP <*> ident varStyle <* symbol "=" <*> exprP
@@ -124,7 +127,20 @@ stmtReturnP :: KOSCParser (Stmt RawName)
 stmtReturnP = SReturn <$> (reserved "return" *> exprP)
 
 stmtBlockP :: KOSCParser (Stmt RawName)
-stmtBlockP = SBlock <$> braces (many stmtP)
+stmtBlockP = SBlock <$> stmtsP
+
+stmtsP :: KOSCParser [Stmt RawName]
+stmtsP = braces (many stmtP)
+
+stmtUntilP :: KOSCParser (Stmt RawName)
+stmtUntilP = SUntil <$> (reserved "until" *> parens exprP) <*> stmtsP
+
+stmtIfP :: KOSCParser (Stmt RawName)
+stmtIfP = SIf <$> (reserved "if" *> parens exprP) <*> stmtsP <*> option [] (reserved "else" *> stmtsP)
+
+stmtForEachP :: KOSCParser (Stmt RawName)
+stmtForEachP = SForEach <$> (reserved "for" *> symbol "(" *> typeP) <*> ident varStyle
+               <* symbol ":" <*> exprP <* symbol ")" <*> stmtsP
 
 testStmt :: String -> (Stmt RawName)
 testStmt str = case parseString (runKOSCParser $ stmtP <* eof) mempty str of
@@ -197,13 +213,18 @@ paramP :: KOSCParser (Param RawName)
 paramP = Param <$> typeP <*> ident varStyle <*> optional (symbol "=" *> exprP)
 
 typeP :: KOSCParser (Type RawName)
-typeP = TypeGeneric <$> rawNameP <*> option [] (angles $ commaSep typeP)
+typeP = do
+  retTy <- TypeGeneric <$> rawNameP <*> option [] (angles $ commaSep typeP)
+  maybeFun <- optional ((,) <$> parens (commaSep typeP) <*> option [] (brackets (commaSep typeP)))
+  case maybeFun of
+    Nothing -> return retTy
+    Just (args, opts) -> return (TypeFunction retTy args opts)
 
 accessibilityP :: KOSCParser Accessibility
 accessibilityP = option GetOrSet $ (Get <$ reserved "get") <|> (Set <$ reserved "set")
 
 builtinP :: KOSCParser (Builtin RawName)
-builtinP = reserved "builtin" *> choice [BuiltinStruct <$> try structSigP, BuiltinFun <$> try funSigP, BuiltinVar <$> varSigP <* semi]
+builtinP = reserved "builtin" *> choice [BuiltinStruct <$> try structSigP, BuiltinFun <$> try funSigP <* semi, BuiltinVar <$> varSigP <* semi]
 
 testModule :: String -> (Module RawName)
 testModule str = case parseString (runKOSCParser $ moduleP <* eof) mempty str of

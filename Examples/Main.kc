@@ -16,7 +16,18 @@ public A Lookup<A>(List<A> list, Scalar index) {
   return list[index];
 }
 
+public Void ForEach<A>(Enumerable<A> e, Void(A) action) {
+  for(A x : e) {
+    action(x);
+  }
+}
+
+public Void Dummy(Structure value) {
+}
+
 Scalar globalVar = 2;
+
+builtin Enumerable<Scalar> test get;
 
 public Void Main() {
   Scalar x = 3;
@@ -27,5 +38,12 @@ public Void Main() {
   }
   globalVar = (globalVar + 1) * 4 + 2 * (3 * 5);
   String s = (x + 1).TypeName;
+  Structure foo = s;
+
+  List<Scalar> someList = List<Scalar>();
+  someList.Add(1);
+  someList.Add(2);
+  ForEach<Scalar>(someList, Dummy);
+
   AP::Init();
 }

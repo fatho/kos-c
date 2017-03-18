@@ -55,7 +55,7 @@ data ImportDecl = ImportDecl
 data Type name
   = TypeGeneric name [Type name] -- ^ generic type instantiation (when there are zero arguments, this is just a normal type)
   | TypeFunction (Type name) [Type name] [Type name] -- ^ function type with parameters and optional parameters separated
-  deriving (Read, Show)
+  deriving (Eq, Ord, Read, Show)
 
 -- | Describes a function parameter.
 data Param name = Param { _paramType :: Type name, _paramName :: Ident, _paramOpt :: Maybe (Expr name) }
@@ -147,6 +147,9 @@ data Stmt name
   | SReturn (Expr name)
   | SExpr (Expr name) -- ^ useful for expressions with side-effects such as function calls
   | SBlock [Stmt name]
+  | SIf (Expr name) [Stmt name] [Stmt name]
+  | SForEach (Type name) Ident (Expr name) [Stmt name]
+  | SUntil (Expr name) [Stmt name]
   deriving (Read, Show)
 
 -- * Lenses

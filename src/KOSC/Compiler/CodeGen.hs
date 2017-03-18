@@ -187,6 +187,9 @@ generateExpression e = go 0 e where
         return $ precParens outerPrec 10 [qq|list({L.intercalate "," argCode})|]
     AST.EUnknown -> criticalWithContext $ MessageUnspecified $ PP.text "Encountered unknown expression in code generator. This is a bug."
 
+generateStatements :: Monad m => [AST.Stmt AST.ScopedName] -> CodeGenM m L.Text
+generateStatements stmts = L.concat <$> traverse generateStatement stmts
+
 generateStatement :: Monad m => AST.Stmt AST.ScopedName -> CodeGenM m L.Text
 generateStatement s = case s of
   AST.SDeclVar _ name init -> do
@@ -203,8 +206,22 @@ generateStatement s = case s of
     code <- generateExpression e
     return $ [qq|$code.$ln|]
   AST.SBlock stmts -> do
-    code <- L.concat <$> traverse generateStatement stmts
-    return $ [qq|\{$ln$code\}$ln|]
+    code <- generateStatements stmts
+    return [qq|\{$code\}$ln|]
+  AST.SIf cond sthen selse -> do
+    tcode <- generateStatements sthen
+    ecode <- generateStatements selse
+    ccode <- generateExpression cond
+    let elsePart = if null selse then ln else [qq| else \{$ln$ecode\}$ln|]
+    return $ [qq|if $ccode \{$ln $tcode \}$elsePart|]
+  AST.SUntil cond body -> do
+    bcode <- generateStatements body
+    ccode <- generateExpression cond
+    return [qq|until $ccode \{$ln$bcode\}$ln|]
+  AST.SForEach _ name expr body -> do
+    ecode <- generateExpression expr
+    bcode <- generateStatements body
+    return [qq|for $name in $ecode \{$ln$bcode\}$ln|]
 
 generateFunction :: Monad m => GeneratedName -> AST.FunDecl AST.ScopedName -> CodeGenM m L.Text
 generateFunction actualName decl = do
@@ -213,7 +230,7 @@ generateFunction actualName decl = do
         ecode <- generateExpression e
         return [qq|$name IS $ecode|]
   pcode <- mapM param (decl ^. AST.funDeclSignature . AST.funSigParameters)
-  body <- L.concat <$> traverse generateStatement (decl ^. AST.funDeclStatements)
+  body <- generateStatements (decl ^. AST.funDeclStatements)
   let paramDecl = if null pcode then L.empty else [qq|DECLARE PARAMETER {L.intercalate "," pcode}.$ln|]
       code = [qq|FUNCTION $actualName \{$ln$paramDecl$body\}$ln|]
   return code

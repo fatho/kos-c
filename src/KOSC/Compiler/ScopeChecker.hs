@@ -179,6 +179,14 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
   checkStmt (AST.SReturn ret) = AST.SReturn <$> checkExpr ret
   checkStmt (AST.SExpr ex) = AST.SExpr <$> checkExpr ex
   checkStmt (AST.SBlock stmts) = localScope $ AST.SBlock <$> traverse checkStmt stmts
+  checkStmt (AST.SIf cond sthen selse) = AST.SIf <$> checkExpr cond <*> localScope (traverse checkStmt sthen) <*> localScope (traverse checkStmt selse)
+  checkStmt (AST.SUntil cond body) = AST.SUntil <$> checkExpr cond <*> localScope (traverse checkStmt body)
+  checkStmt (AST.SForEach ty var e body) = localScope $ do
+    ty' <- checkType ty
+    e' <- checkExpr e
+    insertLocalVars [var]
+    body' <- localScope (traverse checkStmt body)
+    return $ AST.SForEach ty' var e' body'
 
   checkBuiltin (AST.BuiltinStruct ssig) = AST.BuiltinStruct <$> checkStructSig ssig
   checkBuiltin (AST.BuiltinFun fsig) = AST.BuiltinFun <$> checkFunSig fsig
