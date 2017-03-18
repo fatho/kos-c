@@ -12,26 +12,18 @@ module KOSC.Compiler.ScopeChecker where
 import           Control.Lens
 import           Control.Monad.Except
 import           Control.Monad.State
-import           Control.Monad.Reader
 import           Data.Foldable
 import           Data.Semigroup
 import           Data.List
 import           Data.Maybe
 import           Data.Map.Strict              (Map)
 import qualified Data.Map.Strict              as Map
-import           Data.Set                     (Set)
 import qualified Data.Set                     as Set
-import           System.Directory
-import           System.FilePath
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
-import qualified Text.Trifecta                as Trifecta
 
 import qualified KOSC.Language.AST                     as AST
-import qualified KOSC.Language.Parser                  as Parser
 import KOSC.Compiler.Common
 import KOSC.Compiler.ImportResolution
-
-import Debug.Trace
 
 -- | A scope consists of mappings from raw names to the respective variables or types.
 data Scope = Scope
@@ -140,7 +132,7 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
     insertGenerics gens
     AST.RecDecl vis name gens <$> traverse checkVarSig vars
 
-  checkName desc mapLens n = do
+  checkName mapLens n = do
     scope <- use mapLens
     case Map.lookup n scope of
       Nothing -> do
@@ -153,9 +145,9 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
         return (AST.ScopedGlobal $ head names)
       Just fine -> pure fine
 
-  checkTypeName = checkName "Type" typeScope
+  checkTypeName = checkName typeScope
 
-  checkTermName = checkName "Variable" termScope
+  checkTermName = checkName termScope
 
   checkType (AST.TypeGeneric n args) = AST.TypeGeneric <$> checkTypeName n <*> traverse checkType args
   checkType (AST.TypeFunction ret args opts) = AST.TypeFunction <$> checkType ret <*> traverse checkType args <*> traverse checkType opts

@@ -9,16 +9,7 @@ module KOSC.Compiler where
 
 import           Control.Lens
 import           Control.Monad.Except
-import           Control.Monad.Reader
-import           Control.Monad.State
-import           Data.Foldable
 import           Data.List
-import           Data.Map.Strict                (Map)
-import qualified Data.Map.Strict                as Map
-import           Data.Maybe
-import           Data.Semigroup
-import           Data.Set                       (Set)
-import qualified Data.Set                       as Set
 import           System.Directory
 import           System.FilePath
 import qualified Text.PrettyPrint.ANSI.Leijen   as PP
@@ -33,8 +24,6 @@ import           KOSC.Compiler.ScopeChecker
 import           KOSC.Compiler.TypeChecker
 import           KOSC.Compiler.CodeGen
 
-import           Debug.Trace
-
 data CompilerHooks m = CompilerHooks
   { resolveImport :: AST.ModuleName -> KOSCCompilerT m AST.RawModule
   }
@@ -42,11 +31,10 @@ data CompilerHooks m = CompilerHooks
 -- | Compiles a program given by a main module and returns the corresponding kOS Script code.
 compile :: Monad m => CompilerHooks m -> AST.Module AST.RawName -> KOSCCompilerT m GeneratedCode
 compile hooks mainModule = do
-  let mainModuleName = view AST.moduleName mainModule
   imports <- resolveImports (resolveImport hooks) mainModule
   cancelIfErrorneous $ MessageUnspecified $ PP.text "Failed to resolve imports."
-  scopedMods <- iforM (imports ^. importResolutionModules) $
-                \modName mod -> scopeChecker imports (mod ^. moduleInfoAST)
+  scopedMods <- forM (imports ^. importResolutionModules) $
+                \mod -> scopeChecker imports (mod ^. moduleInfoAST)
   cancelIfErrorneous $ MessageUnspecified $ PP.text "Cannot type check without successfully completing scope checking."
   typedMods <- forM scopedMods $ \mod -> typeChecker scopedMods mod
   cancelIfErrorneous $ MessageUnspecified $ PP.text "Cannot generate code with errors."
@@ -88,7 +76,6 @@ fileSystemImportResolver searchPath modName = do
 compileFile :: FileBasedCompilerOptions -> FilePath -> IO (Either KOSCMessage GeneratedCode, [KOSCMessage])
 compileFile opts filename = runCompilerT $ do
   mainmod <- parseModuleFile filename
-  basePath <- liftIO $ getCurrentDirectory
   let hooks = CompilerHooks { resolveImport = fileSystemImportResolver (opts ^. librarySearchPath) }
   compile hooks mainmod
 

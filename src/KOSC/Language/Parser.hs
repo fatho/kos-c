@@ -2,7 +2,6 @@
 module KOSC.Language.Parser where
 
 import           Control.Applicative
-import           Control.Lens
 import           Control.Monad.State
 import qualified Data.HashSet                as HS
 import           Text.Parser.Combinators
@@ -84,15 +83,15 @@ exprP = buildExpressionParser opTable accessorChainP
 
 accessorChainP ::  KOSCParser (Expr RawName)
 accessorChainP = do
-  inner <- argP
-  let chain inner = do
-        cur <- optional $ (EAccessor inner Nothing <$> (dot *> ident varStyle))
-               <|> (EIndex inner Nothing <$> brackets exprP)
-               <|> (ECall inner <$> option [] (angles (commaSep typeP)) <*> parens (commaSep exprP))
+  start <- argP
+  let chain prev = do
+        cur <- optional $ (EAccessor prev Nothing <$> (dot *> ident varStyle))
+               <|> (EIndex prev Nothing <$> brackets exprP)
+               <|> (ECall prev <$> option [] (angles (commaSep typeP)) <*> parens (commaSep exprP))
         case cur of
           Just next -> chain next
-          Nothing   -> return inner
-  chain inner
+          Nothing   -> return prev
+  chain start
 
 argP :: KOSCParser (Expr RawName)
 argP = choice [stringP, scalarP, unknownP, try recordInitP, castP, varP, parens exprP]
@@ -118,7 +117,7 @@ recordInitP = ERecordInit <$> rawNameP <*> option [] (angles (commaSep typeP)) <
 
 testExpr :: String -> (Expr RawName)
 testExpr str = case parseString (runKOSCParser $ exprP <* eof) mempty str of
-  Failure doc -> error $ show doc
+  Failure d -> error $ show d
   Success e   -> e
 
 -- * Statement Parser
@@ -157,7 +156,7 @@ stmtForEachP = SForEach <$> (reserved "for" *> symbol "(" *> typeP) <*> ident va
 
 testStmt :: String -> (Stmt RawName)
 testStmt str = case parseString (runKOSCParser $ stmtP <* eof) mempty str of
-  Failure doc -> error $ show doc
+  Failure d -> error $ show d
   Success e   -> e
 
 -- * Declaration Parser
@@ -241,5 +240,5 @@ builtinP = reserved "builtin" *> choice [BuiltinStruct <$> try structSigP, Built
 
 testModule :: String -> (Module RawName)
 testModule str = case parseString (runKOSCParser $ moduleP <* eof) mempty str of
-  Failure doc -> error $ show doc
+  Failure d -> error $ show d
   Success e   -> e

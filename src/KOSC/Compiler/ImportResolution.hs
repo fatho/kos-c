@@ -19,26 +19,16 @@ module KOSC.Compiler.ImportResolution
 
 import           Control.Lens
 import           Control.Monad.Except
-import           Control.Monad.Reader
 import           Control.Monad.State
-import           Data.Foldable
 import           Data.List
 import           Data.Map.Strict              (Map)
 import qualified Data.Map.Strict              as Map
-import           Data.Maybe
-import           Data.Semigroup
 import           Data.Set                     (Set)
 import qualified Data.Set                     as Set
-import           System.Directory
-import           System.FilePath
-import qualified Text.PrettyPrint.ANSI.Leijen as PP
-import qualified Text.Trifecta                as Trifecta
 
 import           KOSC.Compiler.Common
 import qualified KOSC.Language.AST            as AST
-import qualified KOSC.Language.Parser         as Parser
 
-import           Debug.Trace
 
 -- | Results of running the import resolver.
 data ImportResolution = ImportResolution
@@ -82,12 +72,12 @@ getExportedTermNames mod = [ name | decl <- view AST.declarations mod, name <- g
 getExportedTypeNames :: AST.Module name -> [AST.Ident]
 getExportedTypeNames mod = [ name | decl <- view AST.declarations mod, name <- getname decl ] where
   getname (AST.DeclImport _) = []
-  getname (AST.DeclFun fd) = []
-  getname (AST.DeclVar fd) = []
+  getname (AST.DeclFun _) = []
+  getname (AST.DeclVar _) = []
   getname (AST.DeclRec r) = [r ^. AST.recDeclName]
   getname (AST.DeclBuiltin (AST.BuiltinStruct ssig)) = [ ssig ^. AST.structSigName ]
-  getname (AST.DeclBuiltin (AST.BuiltinFun fsig)) = [ ]
-  getname (AST.DeclBuiltin (AST.BuiltinVar vsig)) = [ ]
+  getname (AST.DeclBuiltin (AST.BuiltinFun _)) = [ ]
+  getname (AST.DeclBuiltin (AST.BuiltinVar _)) = [ ]
 
 -- | Transitively resolves all imports, starting at the given main module.
 resolveImports :: Monad m => (AST.ModuleName -> KOSCCompilerT m AST.RawModule) -> AST.RawModule -> KOSCCompilerT m ImportResolution

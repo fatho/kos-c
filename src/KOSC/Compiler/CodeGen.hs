@@ -7,31 +7,20 @@
 module KOSC.Compiler.CodeGen where
 
 import           Control.Lens
-import           Control.Monad
-import           Control.Monad.Except
-import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Foldable
 import           Data.List
 import           Data.Map.Strict                (Map)
 import qualified Data.Map.Strict                as Map
 import           Data.Maybe
-import           Data.Monoid
-import           Data.Set                       (Set)
-import qualified Data.Set                       as Set
 import qualified Data.Text.Lazy                 as L
 import           Numeric                        (showIntAtBase, showGFloat)
-import           System.Directory
-import           System.FilePath
-import           Text.InterpolatedString.Perl6  (qc, qq)
+import           Text.InterpolatedString.Perl6  (qq)
 import qualified Text.PrettyPrint.ANSI.Leijen   as PP
-import qualified Text.Trifecta                  as Trifecta
 
 import           KOSC.Compiler.Common
-import           KOSC.Compiler.ImportResolution
 import           KOSC.Compiler.ScopeChecker
 import qualified KOSC.Language.AST              as AST
-import qualified KOSC.Language.Parser           as Parser
 
 type GeneratedName = L.Text
 
@@ -140,6 +129,14 @@ generateExpression e = go 0 e where
         AST.BinOpMult -> ("*", 7, 7, 8)
         AST.BinOpDiv -> ("/", 7, 7, 8)
         AST.BinOpPow -> ("^", 8, 8, 9)
+        AST.BinOpAnd -> ("and", 3, 4, 3)
+        AST.BinOpOr -> ("or", 2, 3, 2)
+        AST.BinOpEq -> ("=", 4, 5, 5)
+        AST.BinOpNeq -> ("<>", 4, 5, 5)
+        AST.BinOpLeq -> ("<=", 4, 5, 5)
+        AST.BinOpGeq -> (">=", 4, 5, 5)
+        AST.BinOpLess -> ("<", 4, 5, 5)
+        AST.BinOpGreater -> (">", 4, 5, 5)
 
   goStructAccessor outerPrec accessed field = do
     acode <- go 10 accessed
@@ -183,6 +180,7 @@ generateExpression e = go 0 e where
             missingInitializers = map (view _1) fields
             dummyVal = AST.EScalar 0 -- dummy value for uninitialized fields
             initArgs = map (\v -> fromMaybe dummyVal $ lookup v fields ) fieldNames
+        messageWithContext MessageWarning $ MessageUninitializedIdentifiers missingInitializers
         argCode <- mapM (go 0) initArgs
         -- compile as list initializer
         return $ precParens outerPrec 10 [qq|list({L.intercalate "," argCode})|]
@@ -196,7 +194,7 @@ generateStatement :: Monad m => AST.Stmt AST.ScopedName -> CodeGenM m L.Text
 generateStatement s = case s of
   AST.SDeclVar _ name init -> do
     icode <- generateExpression init
-    return $ [qq|DECLARE LOCAL $name IS $icode.$ln|]
+    return $ [qq|LOCAL $name IS $icode.$ln|]
   AST.SAssign lhs rhs -> do
     lcode <- generateExpression lhs
     rcode <- generateExpression rhs
@@ -233,7 +231,7 @@ generateFunction actualName decl = do
         return [qq|$name IS $ecode|]
   pcode <- mapM param (decl ^. AST.funDeclSignature . AST.funSigParameters)
   body <- generateStatements (decl ^. AST.funDeclStatements)
-  let paramDecl = if null pcode then L.empty else [qq|DECLARE PARAMETER {L.intercalate "," pcode}.$ln|]
+  let paramDecl = if null pcode then L.empty else [qq|PARAMETER {L.intercalate "," pcode}.$ln|]
       code = [qq|FUNCTION $actualName \{$ln$paramDecl$body\}$ln|]
   return code
 

@@ -5,13 +5,7 @@
 {-# LANGUAGE TemplateHaskell            #-}
 module KOSC.Compiler.Errors where
 
-import           Control.Lens
-import           Control.Monad.Except
-import           Control.Monad.Reader
-import           Control.Monad.State
-import           Data.Maybe
-import           Data.Monoid
-
+import           Data.List
 import           Text.PrettyPrint.ANSI.Leijen as PP hiding ((<$>), (<>))
 
 import qualified KOSC.Language.AST            as AST
@@ -36,6 +30,7 @@ data MessageContent
   | MessageTooManyArguments
   | MessageFieldNotFound (AST.Type AST.ScopedName) AST.Ident
   | MessageWrongAccessibility AST.Accessibility
+  | MessageUninitializedIdentifiers [AST.Ident]
   deriving (Show)
 
 instance PP.Pretty MessageContent where
@@ -58,3 +53,4 @@ instance PP.Pretty MessageContent where
     AST.Get -> pretty "Expression must be gettable, but is only settable."
     AST.Set -> pretty "Expression must be settable, but is only gettable."
     AST.GetOrSet -> pretty "Expression must be both gettable and settable."
+  pretty (MessageUninitializedIdentifiers args) = text "The following identifiers have not been initialized:" <+> text (intercalate ", " args)

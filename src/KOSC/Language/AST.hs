@@ -125,6 +125,8 @@ data RecDecl name = RecDecl
   } deriving (Read, Show)
 
 data BinOp = BinOpPlus | BinOpMinus | BinOpMult | BinOpDiv | BinOpPow
+  | BinOpEq | BinOpLeq | BinOpLess | BinOpGreater | BinOpGeq | BinOpNeq
+  | BinOpAnd | BinOpOr
   deriving (Eq, Ord, Read, Show)
 
 data UnOp = UnOpNegate | UnOpNot
@@ -143,6 +145,7 @@ data Expr name
   | ERecordInit name [Type name] [(Ident, Expr name)]
   | EUnknown -- ^ used as a placeholder in optional parameters of builtin declarations
   | ECast (Type name) (Expr name)
+  | ELambda [Param name] [Stmt name]
   deriving (Read, Show)
 
 -- | Statements
@@ -155,6 +158,13 @@ data Stmt name
   | SIf (Expr name) [Stmt name] [Stmt name]
   | SForEach (Type name) Ident (Expr name) [Stmt name]
   | SUntil (Expr name) [Stmt name]
+  | SBreak
+  | SWait (Expr name)
+  | SWaitUntil (Expr name)
+  | SLock name (Expr name)
+  | SUnlock name
+  | SOn (Expr name) [Stmt name]
+  | SWhen (Expr name) [Stmt name]
   deriving (Read, Show)
 
 -- * Lenses
@@ -172,10 +182,10 @@ makeLenses ''FieldSig
 makeLenses ''Param
 
 instance PP.Pretty ModuleName where
-  pretty (ModuleName parts) = PP.text $ intercalate "::" parts
+  pretty (ModuleName np) = PP.text $ intercalate "::" np
 
 instance PP.Pretty RawName where
-  pretty (RawName parts) = PP.text $ intercalate "::" parts
+  pretty (RawName np) = PP.text $ intercalate "::" np
 
 -- | The semigroup instance implements precedence and ambiguity rules of name scoping.
 instance Semigroup ScopedName where
@@ -184,11 +194,12 @@ instance Semigroup ScopedName where
   (ScopedGlobal g) <> (ScopedGlobal g') = if g == g' then ScopedGlobal g else ScopedAmbiguous [g, g']
   (ScopedAmbiguous a) <> (ScopedGlobal g) = ScopedAmbiguous (g : a)
   (ScopedGlobal g) <> (ScopedAmbiguous a) = ScopedAmbiguous (g : a)
+  (ScopedAmbiguous g1) <> (ScopedAmbiguous g2) = ScopedAmbiguous (g1 ++ g2)
 
 instance PP.Pretty ScopedName where
-  pretty (ScopedGlobal parts) = PP.text $ intercalate "::" parts
+  pretty (ScopedGlobal np) = PP.text $ intercalate "::" np
   pretty (ScopedLocal loc) = PP.text loc
-  pretty (ScopedAmbiguous parts) = PP.hcat (PP.punctuate (PP.comma PP.<> PP.space) (map (PP.text . intercalate "::") parts))
+  pretty (ScopedAmbiguous np) = PP.hcat (PP.punctuate (PP.comma PP.<> PP.space) (map (PP.text . intercalate "::") np))
 
 instance PP.Pretty name => PP.Pretty (Type name) where
   pretty (TypeGeneric n args) = PP.pretty n PP.<> if not (null args) then PP.encloseSep PP.langle PP.rangle PP.comma (map PP.pretty args) else PP.empty
@@ -201,14 +212,6 @@ isOptional = has $ paramOpt . _Just
 
 isMandatory :: Param name -> Bool
 isMandatory = not . isOptional
-
-isArithmeticOp :: BinOp -> Bool
-isArithmeticOp BinOpPlus  = True
-isArithmeticOp BinOpMinus = True
-isArithmeticOp BinOpMult  = True
-isArithmeticOp BinOpDiv   = True
-isArithmeticOp BinOpPow   = True
-isArithmeticOp _ = False
 
 makeGlobalName :: ModuleName -> Ident -> ScopedName
 makeGlobalName modName ident = ScopedGlobal (moduleNameParts modName ++ [ident])

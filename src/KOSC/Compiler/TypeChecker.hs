@@ -8,26 +8,14 @@ module KOSC.Compiler.TypeChecker where
 
 import           Control.Lens
 import Control.Monad
-import           Control.Monad.Except
 import           Control.Monad.State
-import           Control.Monad.Reader
 import           Data.Foldable
-import           Data.Semigroup
-import           Data.List
-import           Data.Maybe
 import           Data.Map.Strict              (Map)
 import qualified Data.Map.Strict              as Map
-import           Data.Set                     (Set)
-import qualified Data.Set                     as Set
-import           System.Directory
-import           System.FilePath
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
-import qualified Text.Trifecta                as Trifecta
 
 import qualified KOSC.Language.AST                     as AST
-import qualified KOSC.Language.Parser                  as Parser
 import KOSC.Compiler.Common
-import KOSC.Compiler.ImportResolution
 import KOSC.Compiler.ScopeChecker
 
 data TypeScheme = TypeScheme [AST.Ident] (AST.Type AST.ScopedName) AST.Accessibility
@@ -58,9 +46,9 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
     buildFunctionEnv sig
     AST.FunDecl sig <$> mapM checkStmt body
 
-  checkVarDecl (AST.VarDecl sig init) = enterDecl (sig ^. AST.varSigName) $ do
-    let TypeScheme declGen declTy declAccess = varSigToTypeScheme sig
-    (init', initTy) <- inferExpr init
+  checkVarDecl (AST.VarDecl sig inite) = enterDecl (sig ^. AST.varSigName) $ do
+    let TypeScheme declGen declTy _ = varSigToTypeScheme sig
+    (init', initTy) <- inferExpr inite
     requireType (TypeScheme declGen declTy AST.Get) initTy
     return $ AST.VarDecl sig init'
 
@@ -85,19 +73,22 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
         requireType (TypeScheme [] reqIdxTy AST.Get) indexTy
         return (AST.EIndex e' (Just indexedTy) eidx', TypeScheme [] idxRet idxAccess)
       _ -> return (AST.EIndex e' (Just unknownType) eidx', TypeScheme [] unknownType idxAccess)
-  inferExpr (AST.EOp e1 op e2) = do
-    (e1', ts@(TypeScheme _ ty1 acc1)) <- inferExpr e1
-    (e2', ts@(TypeScheme _ ty2 acc2)) <- inferExpr e2
+  inferExpr (AST.EOp e1 eop e2) = do
+    (e1', ts1@(TypeScheme _ ty1 acc1)) <- inferExpr e1
+    (e2', ts2@(TypeScheme _ ty2 acc2)) <- inferExpr e2
     requireAccess AST.Get acc1
     requireAccess AST.Get acc2
-    case findOp op ty1 ty2 of
+    void $ requireNonGeneric ts1
+    void $ requireNonGeneric ts2
+    findOp eop ty1 ty2 >>= \case
       Nothing -> do
         messageWithContext MessageError $ MessageUnspecified $ PP.text "No matching operator found."
-        return (AST.EOp e1' op e2', TypeScheme [] unknownType AST.Get)
-      Just retTy -> return (AST.EOp e1' op e2', TypeScheme [] retTy AST.Get)
+        return (AST.EOp e1' eop e2', TypeScheme [] unknownType AST.Get)
+      Just retTy -> return (AST.EOp e1' eop e2', TypeScheme [] retTy AST.Get)
   inferExpr (AST.EUnOp op e) = do
     (e', ts@(TypeScheme _ ty acc)) <- inferExpr e
     requireAccess AST.Get acc
+    requireNonGeneric ts
     case findUnOp op ty of
       Nothing -> do
         messageWithContext MessageError $ MessageUnspecified $ PP.text "No matching operator found."
@@ -124,17 +115,17 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
       other -> do
         messageWithContext MessageError $ MessageFunctionExpected other
         return (AST.ECall f' tyargs args, TypeScheme [] (AST.TypeGeneric (AST.ScopedLocal "__UNKNOWN__") []) AST.Get)
-  inferExpr e@(AST.EScalar d) = return (e, TypeScheme [] scalarType AST.Get)
-  inferExpr e@(AST.EString s) = return (e, TypeScheme [] stringType AST.Get)
+  inferExpr e@(AST.EScalar _) = return (e, TypeScheme [] scalarType AST.Get)
+  inferExpr e@(AST.EString _) = return (e, TypeScheme [] stringType AST.Get)
   inferExpr e@(AST.EUnknown) = return (e, TypeScheme [] unknownType AST.GetOrSet)
-  inferExpr e@(AST.ERecordInit recName tyArgs fields) = do
+  inferExpr (AST.ERecordInit recName tyArgs fields) = do
     let recTy = AST.TypeGeneric recName tyArgs
     fields' <- forM fields $ \(name, expr) -> do
-      fty@(TypeScheme fgen fty' _) <- findField name recTy recTy
+      (TypeScheme fgen fty' _) <- findField name recTy recTy
       (expr', ety) <- inferExpr expr
       requireType (TypeScheme fgen fty' AST.Get) ety
       return (name, expr')
-    return (AST.ERecordInit recName tyArgs fields, TypeScheme [] recTy AST.Get)
+    return (AST.ERecordInit recName tyArgs fields', TypeScheme [] recTy AST.Get)
   inferExpr (AST.ECast ty e) = do
     (e', ts@(TypeScheme _ _ acc)) <- inferExpr e
     _ <- requireNonGeneric ts
@@ -204,7 +195,7 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
          AST.TypeFunction _ _ _ -> notFound
 
   -- searches for a field in a list of fields
-  findFieldSig fieldName [] = Nothing
+  findFieldSig _ [] = Nothing
   findFieldSig fieldName (sig:sigs) = case sig of
     AST.FieldFunSig fsig
       | fsig ^. AST.funSigName == fieldName -> Just (funSigToTypeScheme fsig)
@@ -216,6 +207,7 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
 
   -- predefined types
   -- FIXME: make it so that these do not require a hard-coded type name
+  structType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Builtin", "Structure"]) []
   scalarType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Builtin", "Scalar"]) []
   stringType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Builtin", "String"]) []
   boolType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Builtin", "Boolean"]) []
@@ -237,8 +229,17 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
                      ,(vectorType, scalarType, scalarType)
                      ,(scalarType, vectorType, vectorType)]
     AST.BinOpPow -> [(scalarType, scalarType, scalarType)]
+    AST.BinOpAnd -> [(boolType, boolType, boolType)]
+    AST.BinOpOr -> [(boolType, boolType, boolType)]
+    AST.BinOpEq -> [(structType, structType, boolType)]
+    AST.BinOpLeq -> [(structType, structType, boolType)]
+    AST.BinOpGeq -> [(structType, structType, boolType)]
+    AST.BinOpNeq -> [(structType, structType, boolType)]
+    AST.BinOpGreater -> [(structType, structType, boolType)]
+    AST.BinOpLess -> [(structType, structType, boolType)]
 
-  findOp binOp ty1 ty2 = view _3 <$> find (\(a,b,_) -> a == ty1 && b == ty2) (operatorOverloads binOp)
+  findOp binOp ty1 ty2 = fmap (view _2) . find (view _1) <$> mapM check (operatorOverloads binOp) where
+    check (arg1, arg2, ret) = (\a b -> (a && b, ret)) <$> isSubtypeOf Covariant ty1 arg1 <*> isSubtypeOf Covariant ty2 arg2
 
   unaryOperatorOverloads unOp = case unOp of
     AST.UnOpNegate -> [(scalarType, scalarType), (vectorType, vectorType), (directionType, directionType)]
@@ -255,7 +256,7 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
 
 requireNonGeneric :: MonadCompiler MessageContent m => TypeScheme -> m (AST.Type AST.ScopedName)
 requireNonGeneric (TypeScheme [] ty _) = pure ty
-requireNonGeneric (TypeScheme gen ty _) = do
+requireNonGeneric (TypeScheme _ ty _) = do
   messageWithContext MessageError $ MessageGenericTypeMismatch
   return ty
 
@@ -267,13 +268,14 @@ substituteGenerics subst = go where
   go (AST.TypeFunction ret args opts) = AST.TypeFunction (go ret) (map go args) (map go opts)
 
 requireAccess :: MonadCompiler MessageContent m => AST.Accessibility -> AST.Accessibility -> m ()
-requireAccess required actual = case required of
-  AST.Get -> when (actual == AST.Set) msg
-  AST.Set -> when (actual == AST.Get) msg
-  AST.GetOrSet -> when (actual /= AST.GetOrSet) msg
-  where
-    msg = messageWithContext MessageError $ MessageWrongAccessibility required
+requireAccess required actual = when (not $ hasAccess required actual) $
+  messageWithContext MessageError $ MessageWrongAccessibility required
 
+hasAccess :: AST.Accessibility -> AST.Accessibility -> Bool
+hasAccess required actual = case required of
+  AST.Get -> actual /= AST.Set
+  AST.Set -> actual /= AST.Get
+  AST.GetOrSet -> actual == AST.GetOrSet
 
 data Variance = Covariant | Contravariant | Invariant
 
@@ -282,7 +284,6 @@ flipVariance Covariant = Contravariant
 flipVariance Contravariant = Covariant
 flipVariance Invariant = Invariant
 
--- TODO: perform subtyping check instead of equality
 requireType :: MonadCompiler MessageContent m => TypeScheme -> TypeScheme -> StateT TypeEnv m ()
 requireType (TypeScheme gen1 ty1 acc1) (TypeScheme gen2 ty2 acc2)
   | length gen1 /= length gen2 = messageWithContext MessageError $ MessageGenericTypeMismatch
@@ -300,14 +301,40 @@ requireType (TypeScheme gen1 ty1 acc1) (TypeScheme gen2 ty2 acc2)
         messageWithContext MessageError $ MessageTypesNotEqual t1 t2
       zipWithM_ (compareTypes $ flipVariance var) args1 args2
       zipWithM_ (compareTypes $ flipVariance var) opts1 opts2
-    compareTypes var t1 t2 = messageWithContext MessageError $ MessageTypesNotEqual t1 t2
+    compareTypes _ t1 t2 = messageWithContext MessageError $ MessageTypesNotEqual t1 t2
 
-    checkCast Invariant n1 args1 n2 args2 = return $ n1 == n2
-    checkCast Covariant n1 args1 n2 args2 = (n2, args2) `isSubtypeOf` (n1, args1)
-    checkCast Contravariant n1 args1 n2 args2 = (n1, args1) `isSubtypeOf` (n2, args2)
+    checkCast Invariant n1 args1 n2 args2 = return $ n1 == n2 && args1 == args2
+    checkCast Covariant n1 args1 n2 args2 = (n2, args2) `isSubStructOf` (n1, args1)
+    checkCast Contravariant n1 args1 n2 args2 = (n1, args1) `isSubStructOf` (n2, args2)
 
-isSubtypeOf :: MonadCompiler MessageContent m => (AST.ScopedName, [AST.Type AST.ScopedName]) -> (AST.ScopedName, [AST.Type AST.ScopedName]) -> StateT TypeEnv m Bool
-isSubtypeOf (n1, tyargs1) (n2, tyargs2)
+isSubSchemeOf :: MonadCompiler MessageContent m => TypeScheme -> TypeScheme -> StateT TypeEnv m Bool
+isSubSchemeOf (TypeScheme gen1 ty1 acc1) (TypeScheme gen2 ty2 acc2)
+  | length gen1 /= length gen2 = return False
+  | otherwise = do
+      isSub <- isSubtypeOf Covariant (substituteGenerics (Map.fromList $ zip gen1 (map (\g -> AST.TypeGeneric (AST.ScopedLocal g) []) gen2)) ty1) ty2
+      return $ isSub && hasAccess acc1 acc2
+
+isSubtypeOf :: MonadCompiler MessageContent m => Variance -> AST.Type AST.ScopedName -> AST.Type AST.ScopedName -> StateT TypeEnv m Bool
+isSubtypeOf = compareTypes where
+    compareTypes var (AST.TypeGeneric n1 args1) (AST.TypeGeneric n2 args2) = do
+      allowedCast <- checkCast var n1 args1 n2 args2
+      return $ allowedCast && length args1 == length args2
+    compareTypes var (AST.TypeFunction ret1 args1 opts1) (AST.TypeFunction ret2 args2 opts2) = do
+      c1 <- compareTypes var ret1 ret2
+      if length args1 /= length args2 || length opts1 /= length opts2
+        then return False
+        else do
+           c2 <- and <$> zipWithM (compareTypes $ flipVariance var) args1 args2
+           c3 <- and <$> zipWithM (compareTypes $ flipVariance var) opts1 opts2
+           return $ c1 && c2 && c3
+    compareTypes _ _ _ = return False
+
+    checkCast Invariant n1 args1 n2 args2 = return $ n1 == n2 && args1 == args2
+    checkCast Covariant n1 args1 n2 args2 = (n2, args2) `isSubStructOf` (n1, args1)
+    checkCast Contravariant n1 args1 n2 args2 = (n1, args1) `isSubStructOf` (n2, args2)
+
+isSubStructOf :: MonadCompiler MessageContent m => (AST.ScopedName, [AST.Type AST.ScopedName]) -> (AST.ScopedName, [AST.Type AST.ScopedName]) -> StateT TypeEnv m Bool
+isSubStructOf (n1, tyargs1) (n2, tyargs2)
   | n1 == n2 && tyargs1 == tyargs2 = return True
   | otherwise = do
       ty1 <- use (globalTypeMap . at n1)
@@ -318,7 +345,7 @@ isSubtypeOf (n1, tyargs1) (n2, tyargs2)
               -- substitute generic variables of *the structure*
               let gensubst = Map.fromList $ zip (ssig ^. AST.structSigGenerics) tyargs1
               case ssig ^. AST.structSigSuper of -- try super structure
-                Just (AST.TypeGeneric nsuper argsSuper) -> isSubtypeOf (nsuper, map (substituteGenerics gensubst) argsSuper) (n2, tyargs2)
+                Just (AST.TypeGeneric nsuper argsSuper) -> isSubStructOf (nsuper, map (substituteGenerics gensubst) argsSuper) (n2, tyargs2)
                 _ -> return False
         Nothing -> criticalWithContext $ MessageUnspecified $ PP.text "Unknown type encountered during type checking:" PP.<+> PP.pretty n1 PP.<+> PP.text "This is a bug."
 
