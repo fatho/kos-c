@@ -1,7 +1,9 @@
 module KOS::Geography;
 
 import KOS::Builtin unqualified;
+import KOS::Collections unqualified;
 import KOS::Math unqualified;
+import KOS::Orbits unqualified;
 
 builtin structure GeoCoordinates {
   Scalar Lat get;
@@ -12,7 +14,48 @@ builtin structure GeoCoordinates {
   Scalar Bearing get;
   Vector Position get;
   Vector AltitudePosition(Scalar alt);
-  // TODO: OrbitableVelocity
+  OrbitableVelocity Velocity get;
+  OrbitableVelocity AltitudeVelocity(Scalar alt);
 }
 
 builtin GeoCoordinates LatLng(Scalar lat, Scalar lng);
+
+builtin structure Body : Orbitable {
+  String Name get;
+  String Description get;
+  Scalar Mass get;
+  Scalar RotationPeriod get;
+  Scalar Radius get;
+  Scalar Mu get;
+  Atmosphere Atm get;
+  Vector AngularVel get;
+  GeoCoordinates GeoPositionOf(Vector position);
+  Scalar AltitudeOf(Vector position);
+  Scalar SoiRadius get;
+  Scalar RotationAngle get;
+}
+
+builtin structure Atmosphere {
+  String Body get;
+  Boolean Exists get;
+  Boolean Oxygen get;
+  Scalar Scale get;
+  Scalar SeaLevelPressure get;
+  Scalar Height get;
+}
+
+builtin structure Waypoint : Structure {
+  String Name get;
+  Body Body get;
+  GeoCoordinates GeoPosition get;
+  Vector Position get;
+  Scalar Altitude get;
+  Scalar AGL get;
+  Boolean NearSurface get;
+  Boolean Grounded get;
+  Scalar Index get;
+  Boolean Clustered get;
+}
+
+builtin Waypoint Waypoint(String name);
+builtin List<Waypoint> AllWaypoints get;

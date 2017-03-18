@@ -1,0 +1,30 @@
+module KOS::Communication;
+
+import KOS::Builtin unqualified;
+import KOS::Time unqualified;
+import KOS::Vessel unqualified;
+
+builtin structure Connection : Structure {
+  Boolean IsConnected get;
+  Scalar Delay get;
+  // Is either Vessel or kOSProcessor, but that cannot yet be expressed
+  Structure Destination get;
+  Boolean SendMessage(Structure message);
+}
+
+builtin structure Message : Structure {
+  TimeSpan SentAt get;
+  TimeSpan ReceivedAt get;
+  Vessel Sender get;
+  Boolean HasSender get;
+  Structure Content get;
+}
+
+builtin structure MessageQueue : Structure {
+  Boolean Empty get;
+  Scalar Length get;
+  Message Pop();
+  Message Peek();
+  Void Clear();
+  Void Push(Message msg);
+}

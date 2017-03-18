@@ -255,18 +255,23 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
   boolType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Builtin", "Boolean"]) []
   vectorType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Math", "Vector"]) []
   directionType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Math", "Direction"]) []
+  timeSpanType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Time", "TimeSpan"]) []
   enumerableType a = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Collections", "Enumerable"]) [a]
   unknownType = AST.TypeGeneric (AST.ScopedLocal "__UNKNOWN__") []
 
   operatorOverloads binOp = case binOp of
     AST.BinOpPlus -> [(scalarType, scalarType, scalarType)
                      ,(vectorType, vectorType, vectorType)
-                     ,(stringType, stringType, stringType)]
+                     ,(stringType, stringType, stringType)
+                     ,(timeSpanType, scalarType, timeSpanType)
+                     ,(scalarType, timeSpanType, timeSpanType)]
     AST.BinOpMinus -> [(scalarType, scalarType, scalarType)
-                     ,(vectorType, vectorType, vectorType)]
+                     ,(vectorType, vectorType, vectorType)
+                     ,(timeSpanType, scalarType, timeSpanType)
+                     ,(scalarType, timeSpanType, timeSpanType)]
     AST.BinOpMult -> [(scalarType, scalarType, scalarType)
                      ,(vectorType, vectorType, scalarType)
-                     ,(vectorType, scalarType, scalarType)
+                     ,(vectorType, scalarType, vectorType)
                      ,(scalarType, vectorType, vectorType)]
     AST.BinOpDiv -> [(scalarType, scalarType, scalarType)
                      ,(vectorType, scalarType, scalarType)

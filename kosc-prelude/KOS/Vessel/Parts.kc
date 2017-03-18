@@ -1,0 +1,59 @@
+module KOS::Vessel::Parts;
+
+import KOS::Builtin unqualified;
+import KOS::Collections unqualified;
+import KOS::Communication unqualified;
+import KOS::Math unqualified;
+import KOS::Orbits unqualified;
+import KOS::Vessel unqualified;
+import KOS::Vessel::Modules unqualified;
+
+builtin structure DockingPort : Part {
+  Scalar AcquireRange get;
+  Scalar AcquireForce get;
+  Scalar AcquireTorque get;
+  Scalar ReengagedDistance get;
+  String DockedShipName get;
+  Vector NodePosition get;
+  String NodeType get; // TODO: enum
+  Direction PortFacing get;
+  String State get; // TODO: enum
+  Void Undock();
+}
+
+builtin structure Engine : Part {
+  Void Activate();
+  Void Shutdown();
+  Scalar ThrustLimit;
+  Scalar MaxThrust get;
+  Scalar MaxThrustAt(Scalar pressure);
+  Scalar Thrust get;
+  Scalar AvailableThrust get;
+  Scalar AvailableThrustAt(Scalar pressure);
+  Scalar FuelFlow get;
+  Scalar Isp get;
+  Scalar IspAt(Scalar pressure);
+  Scalar VacuumIsp get;
+  Scalar VIsp get;
+  Scalar SeaLevelIsp get;
+  Scalar SLIsp get;
+  Boolean Flameout get;
+  Boolean Ignition get;
+  Boolean AllowRestart get;
+  Boolean ThrottleLock get;
+  Boolean MultiMode get;
+  List<String> Modes get;
+  Void ToggleMode();
+  Boolean PrimaryMode;
+  Boolean AutoSwitch;
+  Boolean HasGimbal get;
+  Gimbal Gimbal get;
+}
+
+builtin structure Sensor : Part {
+  Boolean Active get;
+  Structure Type get; // FIXME get information on type
+  String Display get;
+  Scalar PowerConsumption get;
+  Void Toggle();
+}

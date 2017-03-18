@@ -2,11 +2,14 @@ module KOS::Vessel;
 
 import KOS::Builtin unqualified;
 import KOS::Collections unqualified;
+import KOS::Communication unqualified;
 import KOS::Math unqualified;
+import KOS::Orbits unqualified;
+import KOS::Vessel::Parts unqualified;
 
 builtin Vessel Ship get;
 
-builtin structure Vessel {
+builtin structure Vessel : Orbitable {
   Control Control get;
   Scalar Bearing get;
   Scalar Heading get;
@@ -34,7 +37,6 @@ builtin structure Vessel {
   Boolean Unpacked get;
   // TODO LoadDistance LoadDistance get;
   Boolean IsDead get;
-  //TODO List<Orbit> Patches get;
   Part RootPart get;
   Part ControlPart get;
   List<Part> Parts get;
@@ -50,11 +52,11 @@ builtin structure Vessel {
   List<Part> AllPartsTagged get;
   Scalar CrewCapacity get;
   List<CrewMember> Crew get;
-  // TODO Connection Connection get;
-  // TODO MessageQueue Messages get;
+  Connection Connection get;
+  MessageQueue Messages get;
 }
 
-builtin structure Control {
+builtin structure Control : Structure {
   Scalar MainThrottle;
   Scalar Yaw;
   Scalar Pitch;
@@ -93,7 +95,7 @@ builtin structure Control {
 }
 
 
-builtin structure CrewMember {
+builtin structure CrewMember : Structure {
   String Name get;
   String Gender get; // TODO: enum
   Scalar Experience get;
@@ -102,7 +104,7 @@ builtin structure CrewMember {
   Part Part get;
 }
 
-builtin structure Part {
+builtin structure Part : Structure {
   String Name get;
   String Title get;
   Scalar Mass get;
@@ -126,7 +128,7 @@ builtin structure Part {
   List<Part> Children get;
 }
 
-builtin structure PartModule {
+builtin structure PartModule : Structure {
   String Name get;
   Part Part get;
   List<String> AllFields get;
@@ -144,7 +146,7 @@ builtin structure PartModule {
   Boolean HasAction(String name);
 }
 
-builtin structure Resource {
+builtin structure Resource : Structure {
   String Name get;
   Scalar Amount get;
   Scalar Density get;
@@ -153,14 +155,14 @@ builtin structure Resource {
   Boolean Enabled get;
 }
 
-builtin structure AggregateResource {
+builtin structure AggregateResource : Structure {
   String Name get;
   Scalar Amount get;
   Scalar Capacity get;
   List<Part> Parts get;
 }
 
-builtin structure Element {
+builtin structure Element : Structure {
   String Name get;
   String UID get;
   List<Part> Parts get;
@@ -169,23 +171,19 @@ builtin structure Element {
   List<AggregateResource> Resources get;
 }
 
-builtin structure DockingPort : Part {
-  Scalar AcquireRange get;
-  Scalar AcquireForce get;
-  Scalar AcquireTorque get;
-  Scalar ReengagedDistance get;
-  String DockedShipName get;
-  Vector NodePosition get;
-  String NodeType get; // TODO: enum
-  Direction PortFacing get;
-  String State get; // TODO: enum
-  Void Undock();
-}
-
-builtin structure VesselSensors {
+builtin structure VesselSensors : Structure {
   Vector Acc get;
   Scalar Pres get;
   Scalar Temp get;
   Vector Grav get;
   Scalar Light get;
 }
+
+builtin structure Stage {
+  Boolean Ready get;
+  Scalar Number get;
+  List<AggregateResource> Resources get;
+  Lexicon<String, AggregateResource> ResourcesLex get;
+}
+
+builtin Stage Stage;

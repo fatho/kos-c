@@ -1,0 +1,73 @@
+module KOS::Orbits;
+
+import KOS::Builtin unqualified;
+import KOS::Collections unqualified;
+import KOS::Math unqualified;
+import KOS::Geography unqualified;
+
+builtin structure Orbit : Structure {
+  String Name get;
+  Scalar Apoapsis get;
+  Scalar Periapsis get;
+  Body Body get;
+  Scalar Period get;
+  Scalar Inclination get;
+  Scalar Eccentricity get;
+  Scalar SemiMajorAxis get;
+  Scalar SemiMinorAxis get;
+  Scalar LAN get;
+  Scalar LongitudeOfAscendingNode get;
+  Scalar ArgumentOfPeriapsis get;
+  Scalar TrueAnomaly get;
+  Scalar MeanAnomalyAtEpoch get;
+  String Transition get; // TODO: enum
+  Vector Position get;
+  Vector Velocity get;
+  Orbit NextPatch get;
+  Scalar NextPatchETA get;
+  Boolean HasNextPatch get;
+}
+
+builtin structure Orbitable : Structure {
+  String Name get;
+  Body Body get;
+  Boolean HasBody get;
+  Boolean HasOrbit get;
+  Orbit Orbit get;
+  Direction Up get;
+  Direction North get;
+  Direction Prograde get;
+  Direction SrfPrograde get;
+  Direction Retrograde get;
+  Direction SrfRetrograde get;
+  Vector Position get;
+  OrbitableVelocity Velocity get;
+  Scalar Distance get;
+  Direction Direction get;
+  Scalar Latitude get;
+  Scalar Longitude get;
+  Scalar Altitude get;
+  GeoCoordinates GeoPosition get;
+  List<Orbit> Patches get;
+}
+
+builtin structure OrbitableVelocity : Structure {
+  Scalar Orbit get;
+  Scalar Surface get;
+}
+
+builtin structure ETA : Structure {
+  Scalar Apoapsis;
+  Scalar Periapsis;
+  Scalar Transition;
+}
+
+builtin ETA ETA get;
+
+builtin structure ALT : Structure {
+  Scalar Apoapsis;
+  Scalar Periapsis;
+  Scalar Radar;
+}
+
+builtin ALT ALT get;

@@ -1,0 +1,23 @@
+module KOS::Maneuver;
+
+import KOS::Builtin unqualified;
+import KOS::Collections unqualified;
+import KOS::Math unqualified;
+import KOS::Orbits unqualified;
+
+builtin structure ManeuverNode : Structure {
+  Vector DeltaV get;
+  Vector BurnVector get;
+  Scalar ETA;
+  Scalar Prograde;
+  Scalar RadialOut;
+  Scalar Normal;
+  Orbit Orbit get;
+}
+
+builtin List<ManeuverNode> AllNodes get;
+builtin Boolean HasNode get;
+builtin ManeuverNode NextNode get;
+builtin Void RemoveNode(ManeuverNode node) "Remove";
+builtin Void AddNode(ManeuverNode node) "Add";
+builtin ManeuverNode Node(Scalar utime, Scalar radial, Scalar normal, Scalar prograde);

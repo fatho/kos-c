@@ -103,11 +103,11 @@ generateIfRequired sname = use (generatedNames . at sname) >>= \case
         generatedCode . at sname .= Just vcode
         return name
       BuiltinFun sig -> do
-        let genname = L.pack $ sig ^. AST.funSigName -- preserve names for builtins
+        let genname = L.pack $ fromMaybe (sig ^. AST.funSigName) (sig ^. AST.funSigOutputName)-- preserve names for builtins
         generatedNames . at sname .= Just genname
         return genname
       BuiltinVar sig -> do
-        let genname = L.pack $ sig ^. AST.varSigName -- preserve names for builtins
+        let genname = L.pack $ fromMaybe (sig ^. AST.varSigName) (sig ^. AST.varSigOutputName)-- preserve names for builtins
         generatedNames . at sname .= Just genname
         return genname
 
@@ -142,6 +142,8 @@ generateExpression e = go 0 e where
   genUnOp op = case op of
     AST.UnOpNegate -> ("-", 8)
     AST.UnOpNot -> ("not", 8)
+
+  -- FIXME: allow renaming of structure fields as well
 
   goStructAccessor outerPrec accessed field = do
     acode <- go 10 accessed

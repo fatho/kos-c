@@ -1,0 +1,59 @@
+module KOS::Vessel::Modules;
+
+import KOS::Builtin unqualified;
+import KOS::Collections unqualified;
+import KOS::Communication unqualified;
+import KOS::Math unqualified;
+import KOS::Orbits unqualified;
+import KOS::Vessel unqualified;
+import KOS::Vessel::Parts unqualified;
+
+builtin structure Gimbal : PartModule {
+  Boolean Lock;
+  Boolean Pitch;
+  Boolean Yaw;
+  Boolean Roll;
+  Scalar Limit;
+  Scalar Range get;
+  Scalar ResponseSpeed get;
+  Scalar PitchAngle get;
+  Scalar YawAngle get;
+  Scalar RollAngle get;
+}
+
+builtin structure kOSProcessor : PartModule {
+  String Mode get;
+  Void Activate();
+  Void Deactivate();
+  String Tag get;
+  // TODO: Volume Volume;
+  String BootFileName;
+  Connection Connection;
+}
+
+builtin structure Core : kOSProcessor {
+  Vessel Vessel get;
+  Element Element get;
+  // String Version get;
+  // TODO: Volume CurrentVolume;
+  MessageQueue Messages;
+}
+
+builtin structure ScienceExperimentModule : PartModule {
+  Void Deploy();
+  Void Reset();
+  Void Transmit();
+  Void Dump();
+  Boolean Inoperable get;
+  Boolean Rerunnable get;
+  Boolean Deployed get;
+  Boolean HasData get;
+  List<ScienceData> Data get;
+}
+
+builtin structure ScienceData : Structure {
+  String Title get;
+  Scalar ScienceValue get;
+  Scalar TransmitValue get;
+  Scalar DataAmount get;
+}

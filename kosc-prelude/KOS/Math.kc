@@ -35,3 +35,24 @@ builtin Direction Heading(Scalar dir, Scalar pitch);
 builtin Direction LookDirUp(Vector lookAt, Vector lookUp);
 builtin Direction AngleAxis(Scalar degrees, Vector axis);
 builtin Direction RotateFromTo(Vector from, Vector to);
+
+builtin structure PIDLoop {
+  Scalar LastSampleTime get;
+  Scalar KP;
+  Scalar KI;
+  Scalar KD;
+  Scalar Input get;
+  Scalar Setpoint;
+  Scalar Error get;
+  Scalar Output get;
+  Scalar MaxOutput;
+  Scalar MinOutput;
+  Scalar ErrorSum get;
+  Scalar PTerm get;
+  Scalar ITerm get;
+  Scalar DTerm get;
+  Scalar ChangeRate get;
+  Scalar Update(Scalar time, Scalar input);
+}
+
+builtin PIDLoop PIDLoop(Scalar kp = ?, Scalar ki = ?, Scalar kd = ?, Scalar minOut = ?, Scalar maxOut = ?);

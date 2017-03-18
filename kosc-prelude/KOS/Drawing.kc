@@ -1,0 +1,71 @@
+module KOS::Drawing;
+
+import KOS::Builtin unqualified;
+import KOS::Collections unqualified;
+import KOS::Math unqualified;
+import KOS::Vessel unqualified;
+
+builtin structure Highlight : Structure {
+  Color Color;
+  Boolean Enabled;
+}
+
+builtin Highlight HighlightPart(Part p, Color c) "Highlight";
+builtin Highlight HighlightParts(List<Part> p, Color c) "Highlight";
+builtin Highlight HighlightElement(Element p, Color c) "Highlight";
+
+builtin structure Color : Structure {
+}
+
+builtin structure RGBA : Color {
+  Scalar Red;
+  Scalar Green;
+  Scalar Blue;
+  Scalar Alpha;
+  Scalar R;
+  Scalar G;
+  Scalar B;
+  Scalar A;
+  String HTML get;
+  String HEX get;
+}
+
+builtin Color Red;
+builtin Color Green;
+builtin Color Blue;
+builtin Color Yellow;
+builtin Color Cyan;
+builtin Color Magenta;
+builtin Color Purple;
+builtin Color White;
+builtin Color Black;
+
+builtin RGBA RGB(Scalar red, Scalar green, Scalar blue);
+builtin RGBA RGBA(Scalar red, Scalar green, Scalar blue, Scalar alpha);
+
+builtin structure HSVA : Color {
+  Scalar Hue;
+  Scalar Saturation;
+  Scalar Value;
+  Scalar Alpha;
+  Scalar H;
+  Scalar S;
+  Scalar V;
+  Scalar A;
+}
+
+builtin HSVA HSVA(Scalar h, Scalar s, Scalar v, Scalar a);
+builtin HSVA HSV(Scalar h, Scalar s, Scalar v);
+
+builtin structure VecDraw : Structure {
+  Vector Start;
+  Vector Vec;
+  Color Color;
+  String Label;
+  Scalar Scale;
+  Boolean Show;
+  Scalar Width;
+}
+
+builtin VecDraw VecDraw(Vector start, Vector vec, Color color = ?, String label = ?, Scalar scale = ?, Boolean show = ?, Scalar width = ?);
+builtin Void ClearVecDraws();

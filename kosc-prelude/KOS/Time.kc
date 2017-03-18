@@ -1,0 +1,16 @@
+module KOS::Time;
+
+import KOS::Builtin unqualified;
+
+builtin structure TimeSpan : Structure {
+  String Clock get;
+  String Calendar get;
+  Scalar Second get;
+  Scalar Minute get;
+  Scalar Hour get;
+  Scalar Day get;
+  Scalar Year get;
+  Scalar Seconds get;
+}
+
+builtin TimeSpan Time get;
