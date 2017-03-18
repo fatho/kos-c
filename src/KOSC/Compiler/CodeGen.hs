@@ -128,7 +128,7 @@ generateExpression e = go 0 e where
         AST.BinOpMinus -> ("-", 6, 6, 7)
         AST.BinOpMult -> ("*", 7, 7, 8)
         AST.BinOpDiv -> ("/", 7, 7, 8)
-        AST.BinOpPow -> ("^", 8, 8, 9)
+        AST.BinOpPow -> ("^", 9, 9, 10)
         AST.BinOpAnd -> ("and", 3, 4, 3)
         AST.BinOpOr -> ("or", 2, 3, 2)
         AST.BinOpEq -> ("=", 4, 5, 5)
@@ -137,6 +137,11 @@ generateExpression e = go 0 e where
         AST.BinOpGeq -> (">=", 4, 5, 5)
         AST.BinOpLess -> ("<", 4, 5, 5)
         AST.BinOpGreater -> (">", 4, 5, 5)
+
+  genUnOp :: AST.UnOp -> (L.Text, Int)
+  genUnOp op = case op of
+    AST.UnOpNegate -> ("-", 8)
+    AST.UnOpNot -> ("not", 8)
 
   goStructAccessor outerPrec accessed field = do
     acode <- go 10 accessed
@@ -166,6 +171,10 @@ generateExpression e = go 0 e where
       lcode <- go lprec e1
       rcode <- go rprec e2
       return $ precParens outerPrec selfPrec [qq|$lcode $sym $rcode|]
+    AST.EUnOp op e -> do
+      let (sym, selfPrec) = genUnOp op
+      code <- go selfPrec e
+      return $ precParens outerPrec selfPrec [qq|$sym $code|]
     AST.ECall callee _ args -> do
       ccode <- go 10 callee
       argCode <- mapM (go 0) args
@@ -186,6 +195,7 @@ generateExpression e = go 0 e where
         return $ precParens outerPrec 10 [qq|list({L.intercalate "," argCode})|]
     AST.EUnknown -> criticalWithContext $ MessageUnspecified $ PP.text "Encountered unknown expression in code generator. This is a bug."
     AST.ECast _ e -> go outerPrec e
+    AST.ELambda params _ body -> generateFunctionBody params body
 
 generateStatements :: Monad m => [AST.Stmt AST.ScopedName] -> CodeGenM m L.Text
 generateStatements stmts = L.concat <$> traverse generateStatement stmts
@@ -222,17 +232,46 @@ generateStatement s = case s of
     ecode <- generateExpression expr
     bcode <- generateStatements body
     return [qq|for $name in $ecode \{$ln$bcode\}$ln|]
+  AST.SBreak -> return "break.\n"
+  AST.SLock var expr -> do
+    name <- generateName var
+    ecode <- generateExpression expr
+    return [qq|lock $name to $ecode.$ln|]
+  AST.SUnlock Nothing -> return "unlock all.\n"
+  AST.SUnlock (Just var) -> do
+    name <- generateName var
+    return [qq|unlock $name.$ln|]
+  AST.SWait dur -> do
+    dcode <- generateExpression dur
+    return [qq|wait $dcode.$ln|]
+  AST.SWaitUntil cond -> do
+    ccode <- generateExpression cond
+    return [qq|wait until $ccode.$ln|]
+  AST.SOn change body -> do
+    ccode <- generateExpression change
+    bcode <- generateStatements body
+    return [qq|on $ccode \{$ln$bcode\}$ln|]
+  AST.SWhen cond body -> do
+    ccode <- generateExpression cond
+    bcode <- generateStatements body
+    return [qq|on $ccode \{$ln$bcode\}$ln|]
 
 generateFunction :: Monad m => GeneratedName -> AST.FunDecl AST.ScopedName -> CodeGenM m L.Text
 generateFunction actualName decl = do
+  body <- generateFunctionBody (decl ^. AST.funDeclSignature . AST.funSigParameters) (decl ^. AST.funDeclStatements)
+  let code = [qq|FUNCTION $actualName $body$ln|]
+  return code
+
+generateFunctionBody :: Monad m => [AST.Param AST.ScopedName] -> [AST.Stmt AST.ScopedName] -> CodeGenM m L.Text
+generateFunctionBody params stmts = do
   let param (AST.Param _ name Nothing) = return $ L.pack name
       param (AST.Param _ name (Just e)) = do
         ecode <- generateExpression e
         return [qq|$name IS $ecode|]
-  pcode <- mapM param (decl ^. AST.funDeclSignature . AST.funSigParameters)
-  body <- generateStatements (decl ^. AST.funDeclStatements)
+  pcode <- mapM param params
+  body <- generateStatements stmts
   let paramDecl = if null pcode then L.empty else [qq|PARAMETER {L.intercalate "," pcode}.$ln|]
-      code = [qq|FUNCTION $actualName \{$ln$paramDecl$body\}$ln|]
+      code = [qq|\{$ln$paramDecl$body\}$ln|]
   return code
 
 generateVar :: Monad m => GeneratedName -> AST.VarDecl AST.ScopedName -> CodeGenM m L.Text

@@ -127,7 +127,7 @@ data RecDecl name = RecDecl
 data BinOp = BinOpPlus | BinOpMinus | BinOpMult | BinOpDiv | BinOpPow
   | BinOpEq | BinOpLeq | BinOpLess | BinOpGreater | BinOpGeq | BinOpNeq
   | BinOpAnd | BinOpOr
-  deriving (Eq, Ord, Read, Show)
+  deriving (Eq, Ord, Read, Show, Enum, Bounded)
 
 data UnOp = UnOpNegate | UnOpNot
   deriving (Eq, Ord, Show, Read)
@@ -145,7 +145,7 @@ data Expr name
   | ERecordInit name [Type name] [(Ident, Expr name)]
   | EUnknown -- ^ used as a placeholder in optional parameters of builtin declarations
   | ECast (Type name) (Expr name)
-  | ELambda [Param name] [Stmt name]
+  | ELambda [Param name] (Type name) [Stmt name]
   deriving (Read, Show)
 
 -- | Statements
@@ -162,7 +162,7 @@ data Stmt name
   | SWait (Expr name)
   | SWaitUntil (Expr name)
   | SLock name (Expr name)
-  | SUnlock name
+  | SUnlock (Maybe name)
   | SOn (Expr name) [Stmt name]
   | SWhen (Expr name) [Stmt name]
   deriving (Read, Show)
@@ -218,3 +218,7 @@ makeGlobalName modName ident = ScopedGlobal (moduleNameParts modName ++ [ident])
 
 makeRawName :: ModuleName -> Ident -> RawName
 makeRawName modName ident = RawName (moduleNameParts modName ++ [ident])
+
+isLocalName :: ScopedName -> Bool
+isLocalName (ScopedLocal _) = True
+isLocalName _ = False

@@ -130,6 +130,11 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
     (e', ts@(TypeScheme _ _ acc)) <- inferExpr e
     _ <- requireNonGeneric ts
     return (AST.ECast ty e', TypeScheme [] ty acc)
+  inferExpr (AST.ELambda params ret body) = enterScope $ enterDecl "<<lambda>>" $ do
+    let lambdasig = AST.FunSig AST.Private ret "<<lambda>>" [] params
+    buildFunctionEnv lambdasig
+    body' <- mapM checkStmt body
+    return (AST.ELambda params ret body', funSigToTypeScheme lambdasig)
 
   -- checks that statements are correct
   checkStmt (AST.SDeclVar ty name init) = do
@@ -169,6 +174,31 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
     (e', ety) <- inferExpr e
     requireType (TypeScheme [] (enumerableType ty) AST.Get) ety
     AST.SForEach ty name e' <$> enterScope (traverse checkStmt body)
+  checkStmt (AST.SBreak) = pure AST.SBreak
+  checkStmt (AST.SWait dur) = do
+    (dur', durTy) <- inferExpr dur
+    requireType (TypeScheme [] scalarType AST.Get) durTy
+    return (AST.SWait dur')
+  checkStmt (AST.SWaitUntil cond) = do
+    (cond', condTy) <- inferExpr cond
+    requireType (TypeScheme [] boolType AST.Get) condTy
+    return (AST.SWaitUntil cond')
+  checkStmt (AST.SLock var rhs) = do
+    (_, TypeScheme gen lhsty lhsaccess) <- inferExpr (AST.EVar var)
+    (rhs', rhsty) <- inferExpr rhs
+    -- require Set access on lhs, but get access on rhs
+    requireAccess AST.Set lhsaccess
+    requireType (TypeScheme gen lhsty AST.Get) rhsty
+    return $ AST.SLock var rhs'
+  checkStmt s@(AST.SUnlock _) = pure s
+  checkStmt (AST.SOn cond body) = do
+    (cond', TypeScheme _ _ acc) <- inferExpr cond
+    requireAccess AST.Get acc
+    AST.SOn cond' <$> enterScope (traverse checkStmt body)
+  checkStmt (AST.SWhen cond body) = do
+    (cond', condTy) <- inferExpr cond
+    requireType (TypeScheme [] boolType AST.Get) condTy
+    AST.SWhen cond' <$> enterScope (traverse checkStmt body)
 
   -- searches a field of a type
   findField fieldName startedTy ty =

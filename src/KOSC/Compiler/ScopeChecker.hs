@@ -158,12 +158,16 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
   checkExpr (AST.EAccessor e _ field) = AST.EAccessor <$> checkExpr e <*> pure Nothing <*> pure field
   checkExpr (AST.EIndex e _ eidx) = AST.EIndex <$> checkExpr e <*> pure Nothing <*> checkExpr eidx
   checkExpr (AST.EOp e1 op e2) = AST.EOp <$> checkExpr e1 <*> pure op <*> checkExpr e2
+  checkExpr (AST.EUnOp op e) = AST.EUnOp op <$> checkExpr e
   checkExpr (AST.ECall f tyargs args) = AST.ECall <$> checkExpr f <*> traverse checkType tyargs <*> traverse checkExpr args
   checkExpr (AST.EScalar d) = pure $ AST.EScalar d
   checkExpr (AST.EString s) = pure $ AST.EString s
   checkExpr (AST.EUnknown) = pure $ AST.EUnknown
   checkExpr (AST.ERecordInit name tyArgs fields) = AST.ERecordInit <$> checkTypeName name <*> traverse checkType tyArgs <*> mapMOf (traversed . _2) checkExpr fields
   checkExpr (AST.ECast ty e) = AST.ECast <$> checkType ty <*> checkExpr e
+  checkExpr (AST.ELambda params ret body) = do
+    AST.FunSig _ ret' _ _ params' <- checkFunSig (AST.FunSig AST.Private ret "<<lambda>>" [] params)
+    AST.ELambda params' ret' <$> enterDecl "<<lambda>>" (localScope (traverse checkStmt body))
 
   checkStmt (AST.SDeclVar ty name init) = do
     insertLocalVars [name]
@@ -180,6 +184,13 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
     insertLocalVars [var]
     body' <- localScope (traverse checkStmt body)
     return $ AST.SForEach ty' var e' body'
+  checkStmt (AST.SBreak) = pure AST.SBreak
+  checkStmt (AST.SWait e) = AST.SWait <$> checkExpr e
+  checkStmt (AST.SWaitUntil e) = AST.SWaitUntil <$> checkExpr e
+  checkStmt (AST.SLock var e) = AST.SLock <$> checkTermName var <*> checkExpr e
+  checkStmt (AST.SUnlock var) = AST.SUnlock <$> traverse checkTermName var
+  checkStmt (AST.SOn cond body) = AST.SOn <$> globalScope (checkExpr cond) <*> traverse checkStmt body
+  checkStmt (AST.SWhen cond body) = AST.SOn <$> globalScope (checkExpr cond) <*> traverse checkStmt body
 
   checkBuiltin (AST.BuiltinStruct ssig) = AST.BuiltinStruct <$> checkStructSig ssig
   checkBuiltin (AST.BuiltinFun fsig) = AST.BuiltinFun <$> checkFunSig fsig
@@ -218,11 +229,19 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
 
   checkIndexSig (AST.IndexSig vis ret arg name access) = enterDecl "[]" $ AST.IndexSig vis <$> checkType ret <*> checkType arg <*> pure name <*> pure access
 
+  -- | Saves the current scope and returns when the action is completed.
   localScope act = do
     oldEnv <- get
     r <- act
     put oldEnv
     return r
+
+  -- | Temporarily switches to the global scope. The scope is returned to the local scope after the argument action returns.
+  globalScope act = localScope $ do
+    -- remove all local names
+    termScope %= Map.filter (not . AST.isLocalName)
+    typeScope %= Map.filter (not . AST.isLocalName)
+    act
 
   insertGenerics = traverse_ $ \v -> typeScope . at (AST.RawName [v]) .= Just (AST.ScopedLocal v)
   insertLocalVars = traverse_ $ \v -> termScope . at (AST.RawName [v]) .= Just (AST.ScopedLocal v)

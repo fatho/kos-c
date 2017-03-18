@@ -6,11 +6,11 @@ import           Control.Monad.State
 import qualified Data.HashSet                as HS
 import           Text.Parser.Combinators
 import           Text.Parser.Expression
+import           Text.Parser.LookAhead
 import qualified Text.Parser.Token.Highlight as H
 import           Text.Parser.Token.Style
 import           Text.Trifecta
 import           Text.Trifecta.Delta
-import           Text.Parser.LookAhead
 
 import           KOSC.Language.AST
 
@@ -31,28 +31,37 @@ varStyle = IdentifierStyle
             , _styleReserved = HS.fromList
                 [ "return", "record", "module", "import", "as"
                 , "unqualified", "builtin", "structure", "get", "set"
-                , "until", "if", "else", "for", "cast" ]
+                , "until", "if", "else", "for", "cast", "break", "lock"
+                , "unlock", "on", "when", "wait", "all" ]
             , _styleHighlight = H.Identifier
             , _styleReservedHighlight = H.ReservedIdentifier
             }
 
 opStyle :: TokenParsing m => IdentifierStyle m
 opStyle = emptyOps
-  { _styleReserved = HS.fromList ["+", "-", "*", "/"]
+  { _styleReserved = HS.fromList $ map opSym [minBound..maxBound]
   }
 
 opSym :: BinOp -> String
 opSym o = case o of
-  BinOpPlus  -> "+"
-  BinOpMinus -> "-"
-  BinOpMult  -> "*"
-  BinOpDiv   -> "/"
-  BinOpPow   -> "^"
+  BinOpPlus    -> "+"
+  BinOpMinus   -> "-"
+  BinOpMult    -> "*"
+  BinOpDiv     -> "/"
+  BinOpPow     -> "^"
+  BinOpAnd     -> "&&"
+  BinOpOr      -> "||"
+  BinOpEq      -> "=="
+  BinOpNeq     -> "!="
+  BinOpGeq     -> ">="
+  BinOpLeq     -> "<="
+  BinOpGreater -> ">"
+  BinOpLess    -> "<"
 
 unOpSym :: UnOp -> String
 unOpSym o = case o of
   UnOpNegate -> "-"
-  UnOpNot -> "!"
+  UnOpNot    -> "!"
 
 -- | Parses a variable identifier.
 rawNameP :: KOSCParser RawName
@@ -71,6 +80,9 @@ opTable = [ [entry AssocLeft BinOpPow]
           , [preentry UnOpNegate, preentry UnOpNot]
           , map (entry AssocLeft) [BinOpMult, BinOpDiv]
           , map (entry AssocLeft) [BinOpPlus, BinOpMinus]
+          , map (entry AssocNone) [BinOpEq, BinOpNeq, BinOpGeq, BinOpLeq, BinOpLess, BinOpGreater]
+          , map (entry AssocRight) [BinOpAnd]
+          , map (entry AssocRight) [BinOpOr]
           ]
   where
     entry a o = Infix (binOp o <$ reservedOp (opSym o)) a
@@ -94,7 +106,7 @@ accessorChainP = do
   chain start
 
 argP :: KOSCParser (Expr RawName)
-argP = choice [stringP, scalarP, unknownP, try recordInitP, castP, varP, parens exprP]
+argP = choice [stringP, scalarP, unknownP, try recordInitP, try lambdaP, castP, varP, parens exprP]
 
 stringP :: KOSCParser (Expr RawName)
 stringP = EString <$> stringLiteral
@@ -115,16 +127,19 @@ recordInitP :: KOSCParser (Expr RawName)
 recordInitP = ERecordInit <$> rawNameP <*> option [] (angles (commaSep typeP)) <*> braces (commaSep fieldInitP) where
   fieldInitP = (,) <$> ident varStyle <* symbol "=" <*> exprP
 
+lambdaP :: KOSCParser (Expr RawName)
+lambdaP = ELambda <$> parens (many paramP) <* symbol "->" <*> typeP <*> stmtsP
+
 testExpr :: String -> (Expr RawName)
 testExpr str = case parseString (runKOSCParser $ exprP <* eof) mempty str of
   Failure d -> error $ show d
-  Success e   -> e
+  Success e -> e
 
 -- * Statement Parser
 
 stmtP :: KOSCParser (Stmt RawName)
-stmtP = choice [stmtIfP, stmtUntilP, stmtForEachP] <|>
-  (choice [stmtReturnP, try stmtDeclP, try stmtAssignP, stmtExprP] <* semi) <|> stmtBlockP
+stmtP = choice [stmtIfP, stmtUntilP, stmtForEachP, stmtOnP, stmtWhenP] <|>
+  (choice [stmtReturnP, stmtBreakP, stmtLockP, stmtUnlockP, try stmtWaitUntilP, stmtWaitP, try stmtDeclP, try stmtAssignP, stmtExprP] <* semi) <|> stmtBlockP
 
 stmtDeclP :: KOSCParser (Stmt RawName)
 stmtDeclP = SDeclVar <$> typeP <*> ident varStyle <* symbol "=" <*> exprP
@@ -154,10 +169,31 @@ stmtForEachP :: KOSCParser (Stmt RawName)
 stmtForEachP = SForEach <$> (reserved "for" *> symbol "(" *> typeP) <*> ident varStyle
                <* symbol ":" <*> exprP <* symbol ")" <*> stmtsP
 
+stmtBreakP :: KOSCParser (Stmt RawName)
+stmtBreakP = SBreak <$ reserved "break"
+
+stmtWaitP :: KOSCParser (Stmt RawName)
+stmtWaitP = SWait <$ reserved "wait" <*> exprP
+
+stmtWaitUntilP :: KOSCParser (Stmt RawName)
+stmtWaitUntilP = SWaitUntil <$ reserved "wait" <* reserved "until" <*> exprP
+
+stmtLockP :: KOSCParser (Stmt RawName)
+stmtLockP = SLock <$ reserved "lock" <*> rawNameP <* symbol "=" <*> exprP
+
+stmtUnlockP :: KOSCParser (Stmt RawName)
+stmtUnlockP = SUnlock <$ reserved "unlock" <*> (Nothing <$ reserved "all" <|> Just <$> rawNameP)
+
+stmtOnP :: KOSCParser (Stmt RawName)
+stmtOnP = SOn <$ reserved "on" <*> parens exprP <*> stmtsP
+
+stmtWhenP :: KOSCParser (Stmt RawName)
+stmtWhenP = SWhen <$ reserved "when" <*> parens exprP <*> stmtsP
+
 testStmt :: String -> (Stmt RawName)
 testStmt str = case parseString (runKOSCParser $ stmtP <* eof) mempty str of
   Failure d -> error $ show d
-  Success e   -> e
+  Success e -> e
 
 -- * Declaration Parser
 
@@ -229,7 +265,7 @@ typeP = do
   retTy <- TypeGeneric <$> rawNameP <*> option [] (angles $ commaSep typeP)
   maybeFun <- optional ((,) <$> parens (commaSep typeP) <*> option [] (brackets (commaSep typeP)))
   case maybeFun of
-    Nothing -> return retTy
+    Nothing           -> return retTy
     Just (args, opts) -> return (TypeFunction retTy args opts)
 
 accessibilityP :: KOSCParser Accessibility
@@ -241,4 +277,4 @@ builtinP = reserved "builtin" *> choice [BuiltinStruct <$> try structSigP, Built
 testModule :: String -> (Module RawName)
 testModule str = case parseString (runKOSCParser $ moduleP <* eof) mempty str of
   Failure d -> error $ show d
-  Success e   -> e
+  Success e -> e
