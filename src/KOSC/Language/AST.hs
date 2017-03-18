@@ -138,6 +138,7 @@ data Expr name
   | EString String
   | ERecordInit name [Type name] [(Ident, Expr name)]
   | EUnknown -- ^ used as a placeholder in optional parameters of builtin declarations
+  | ECast (Type name) (Expr name)
   deriving (Read, Show)
 
 -- | Statements

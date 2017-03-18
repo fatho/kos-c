@@ -126,6 +126,10 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
       requireType (TypeScheme fgen fty' AST.Get) ety
       return (name, expr')
     return (AST.ERecordInit recName tyArgs fields, TypeScheme [] recTy AST.Get)
+  inferExpr (AST.ECast ty e) = do
+    (e', ts@(TypeScheme _ _ acc)) <- inferExpr e
+    _ <- requireNonGeneric ts
+    return (AST.ECast ty e', TypeScheme [] ty acc)
 
   -- checks that statements are correct
   checkStmt (AST.SDeclVar ty name init) = do

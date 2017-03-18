@@ -39,6 +39,7 @@ public Void Main() {
   globalVar = (globalVar + 1) * 4 + 2 * (3 * 5);
   String s = (x + 1).TypeName;
   Structure foo = s;
+  String bar = cast<String>(foo);
 
   List<Scalar> someList = List<Scalar>();
   someList.Add(1);

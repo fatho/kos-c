@@ -171,6 +171,7 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
   checkExpr (AST.EString s) = pure $ AST.EString s
   checkExpr (AST.EUnknown) = pure $ AST.EUnknown
   checkExpr (AST.ERecordInit name tyArgs fields) = AST.ERecordInit <$> checkTypeName name <*> traverse checkType tyArgs <*> mapMOf (traversed . _2) checkExpr fields
+  checkExpr (AST.ECast ty e) = AST.ECast <$> checkType ty <*> checkExpr e
 
   checkStmt (AST.SDeclVar ty name init) = do
     insertLocalVars [name]

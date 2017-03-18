@@ -186,6 +186,7 @@ generateExpression e = go 0 e where
         -- compile as list initializer
         return $ precParens outerPrec 10 [qq|list({L.intercalate "," argCode})|]
     AST.EUnknown -> criticalWithContext $ MessageUnspecified $ PP.text "Encountered unknown expression in code generator. This is a bug."
+    AST.ECast _ e -> go outerPrec e
 
 generateStatements :: Monad m => [AST.Stmt AST.ScopedName] -> CodeGenM m L.Text
 generateStatements stmts = L.concat <$> traverse generateStatement stmts

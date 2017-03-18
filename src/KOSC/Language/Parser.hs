@@ -32,7 +32,7 @@ varStyle = IdentifierStyle
             , _styleReserved = HS.fromList
                 [ "return", "record", "module", "import", "as"
                 , "unqualified", "builtin", "structure", "get", "set"
-                , "until", "if", "else", "for" ]
+                , "until", "if", "else", "for", "cast" ]
             , _styleHighlight = H.Identifier
             , _styleReservedHighlight = H.ReservedIdentifier
             }
@@ -85,7 +85,7 @@ accessorChainP = do
   chain inner
 
 argP :: KOSCParser (Expr RawName)
-argP = choice [stringP, scalarP, unknownP, try recordInitP, varP, parens exprP]
+argP = choice [stringP, scalarP, unknownP, try recordInitP, castP, varP, parens exprP]
 
 stringP :: KOSCParser (Expr RawName)
 stringP = EString <$> stringLiteral
@@ -95,6 +95,9 @@ scalarP = EScalar . either fromIntegral id <$> integerOrDouble
 
 varP :: KOSCParser (Expr RawName)
 varP = EVar <$> rawNameP
+
+castP :: KOSCParser (Expr RawName)
+castP = ECast <$> (reserved "cast" *> angles typeP) <*> parens exprP
 
 unknownP :: KOSCParser (Expr RawName)
 unknownP = EUnknown <$ symbol "?"
