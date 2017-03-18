@@ -71,7 +71,7 @@ exprP :: KOSCParser (Expr RawName)
 exprP = buildExpressionParser opTable argP
 
 argP :: KOSCParser (Expr RawName)
-argP = choice [stringP, scalarP, unknownP, accessorChainP]
+argP = choice [stringP, scalarP, unknownP, try recordInitP, accessorChainP]
 
 stringP :: KOSCParser (Expr RawName)
 stringP = EString <$> stringLiteral
@@ -86,14 +86,17 @@ accessorChainP ::  KOSCParser (Expr RawName)
 accessorChainP = do
   var <- rawNameP
   let chain inner = do
-        cur <- optional $ (EAccessor inner <$> (dot *> ident varStyle))
-               <|> (EIndex inner <$> brackets exprP)
+        cur <- optional $ (EAccessor inner Nothing <$> (dot *> ident varStyle))
+               <|> (EIndex inner Nothing <$> brackets exprP)
                <|> (ECall inner <$> option [] (angles (commaSep typeP)) <*> parens (commaSep exprP))
         case cur of
           Just next -> chain next
           Nothing   -> return inner
   chain (EVar var)
 
+recordInitP :: KOSCParser (Expr RawName)
+recordInitP = ERecordInit <$> rawNameP <*> option [] (angles (commaSep typeP)) <*> braces (commaSep fieldInitP) where
+  fieldInitP = (,) <$> ident varStyle <* symbol "=" <*> exprP
 
 testExpr :: String -> (Expr RawName)
 testExpr str = case parseString (runKOSCParser $ exprP <* eof) mempty str of
@@ -134,7 +137,7 @@ moduleP :: KOSCParser (Module RawName)
 moduleP = Module <$> (reserved "module" *> moduleNameP <* symbol ";") <*> many declP
 
 declP :: KOSCParser (Decl RawName)
-declP = choice [DeclImport <$> importDeclP, DeclFun <$> funDeclP, DeclBuiltin <$> builtinP]
+declP = choice [DeclImport <$> importDeclP, DeclRec <$> try recDeclP, DeclVar <$> try varDeclP, DeclFun <$> funDeclP, DeclBuiltin <$> builtinP]
 
 importDeclP :: KOSCParser ImportDecl
 importDeclP = ImportDecl <$> (reserved "import" *> moduleNameP)
@@ -176,7 +179,16 @@ structSigP = StructSig <$> option Public visibilityP
   <*> braces (many (fieldSigP <* semi))
 
 funDeclP :: KOSCParser (FunDecl RawName)
-funDeclP = FunDecl <$> funSigP <*> braces (many stmtP) -- body
+funDeclP = FunDecl <$> funSigP <*> braces (many stmtP)
+
+varDeclP :: KOSCParser (VarDecl RawName)
+varDeclP = VarDecl <$> varSigP <* symbol "=" <*> exprP <* semi
+
+recDeclP :: KOSCParser (RecDecl RawName)
+recDeclP = RecDecl <$> option Public visibilityP
+  <*> (reserved "record" *> ident varStyle)
+  <*> option [] (angles $ commaSep1 $ ident varStyle)
+  <*> braces (many (varSigP <* semi))
 
 paramP :: KOSCParser (Param RawName)
 paramP = Param <$> typeP <*> ident varStyle <*> optional (symbol "=" *> exprP)

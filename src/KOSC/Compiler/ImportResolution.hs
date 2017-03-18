@@ -71,6 +71,8 @@ getExportedTermNames :: AST.Module name -> [AST.Ident]
 getExportedTermNames mod = [ name | decl <- view AST.declarations mod, name <- getname decl ] where
   getname (AST.DeclImport _) = []
   getname (AST.DeclFun fd) = [fd ^. AST.funDeclSignature . AST.funSigName]
+  getname (AST.DeclVar vd) = [vd ^. AST.varDeclSignature . AST.varSigName]
+  getname (AST.DeclRec _) = []
   getname (AST.DeclBuiltin (AST.BuiltinStruct _)) = [] -- struct is only a type name
   getname (AST.DeclBuiltin (AST.BuiltinFun fsig)) = [ fsig ^. AST.funSigName ]
   getname (AST.DeclBuiltin (AST.BuiltinVar vsig)) = [ vsig ^. AST.varSigName ]
@@ -80,6 +82,8 @@ getExportedTypeNames :: AST.Module name -> [AST.Ident]
 getExportedTypeNames mod = [ name | decl <- view AST.declarations mod, name <- getname decl ] where
   getname (AST.DeclImport _) = []
   getname (AST.DeclFun fd) = []
+  getname (AST.DeclVar fd) = []
+  getname (AST.DeclRec r) = [r ^. AST.recDeclName]
   getname (AST.DeclBuiltin (AST.BuiltinStruct ssig)) = [ ssig ^. AST.structSigName ]
   getname (AST.DeclBuiltin (AST.BuiltinFun fsig)) = [ ]
   getname (AST.DeclBuiltin (AST.BuiltinVar vsig)) = [ ]

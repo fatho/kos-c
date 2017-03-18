@@ -74,9 +74,6 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
     -- build a scope for all imports
     fold <$> traverse importedScope imported
 
-  makeGlobalName modName ident = AST.ScopedGlobal (AST.moduleNameParts modName ++ [ident])
-  makeRawName modName ident = AST.RawName (AST.moduleNameParts modName ++ [ident])
-
   importedScope importDecl = do
     let importedName :: AST.ModuleName
         importedName = view AST.importModuleName importDecl
@@ -90,30 +87,34 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
             -- create scope maps
             qualName = fromMaybe importedName (view AST.importAlias importDecl)
             -- use alias name, if given
-            qualTermMap = Map.fromList [ (makeRawName qualName n, makeGlobalName importedName n) | n <- defTerms ]
-            qualTypeMap = Map.fromList [ (makeRawName qualName n, makeGlobalName importedName n) | n <- defTypes ]
+            qualTermMap = Map.fromList [ (AST.makeRawName qualName n, AST.makeGlobalName importedName n) | n <- defTerms ]
+            qualTypeMap = Map.fromList [ (AST.makeRawName qualName n, AST.makeGlobalName importedName n) | n <- defTypes ]
             -- also import unqualified, if requested
             unqualified = view AST.importUnqualified importDecl
-            uqualTermMap = if unqualified then Map.fromList [ (AST.RawName [n], makeGlobalName importedName n) | n <- defTerms ] else Map.empty
-            uqualTypeMap = if unqualified then Map.fromList [ (AST.RawName [n], makeGlobalName importedName n) | n <- defTypes ] else Map.empty
+            uqualTermMap = if unqualified then Map.fromList [ (AST.RawName [n], AST.makeGlobalName importedName n) | n <- defTerms ] else Map.empty
+            uqualTypeMap = if unqualified then Map.fromList [ (AST.RawName [n], AST.makeGlobalName importedName n) | n <- defTypes ] else Map.empty
         return $ Scope (Map.unionWith (<>) qualTermMap uqualTermMap) (Map.unionWith (<>) qualTypeMap uqualTypeMap)
 
   checkedMod = enterModule (view AST.moduleName inputMod) $ do
     scopedAST <- mapMOf (AST.declarations . traversed) checkDecl inputMod
-    let typeExports = Map.fromList $ over (traversed . _1) (makeGlobalName inputModuleName)
+    let typeExports = Map.fromList $ over (traversed . _1) (AST.makeGlobalName inputModuleName)
           $ concatMap scopedTypeExport $ view AST.declarations scopedAST
-        termExports = Map.fromList $ over (traversed . _1) (makeGlobalName inputModuleName)
+        termExports = Map.fromList $ over (traversed . _1) (AST.makeGlobalName inputModuleName)
           $ concatMap scopedTermExport $ view AST.declarations scopedAST
     return $ ScopedModule scopedAST typeExports termExports
 
   scopedTypeExport (AST.DeclImport _) = []
   scopedTypeExport (AST.DeclFun _) = []
+  scopedTypeExport (AST.DeclVar _) = []
+  scopedTypeExport (AST.DeclRec r) = [ (r ^. AST.recDeclName, ScopedStruct $ makeRecordSig r) ]
   scopedTypeExport (AST.DeclBuiltin bi) = case bi of
     AST.BuiltinStruct sig -> [(sig ^. AST.structSigName, ScopedStruct sig)]
     _ -> []
 
   scopedTermExport (AST.DeclImport _) = []
   scopedTermExport (AST.DeclFun (AST.FunDecl fsig _)) = [(fsig ^. AST.funSigName, ScopedFun fsig)]
+  scopedTermExport (AST.DeclVar (AST.VarDecl vsig _)) = [(vsig ^. AST.varSigName, ScopedVar vsig)]
+  scopedTermExport (AST.DeclRec _) = []
   scopedTermExport (AST.DeclBuiltin bi) = case bi of
     AST.BuiltinFun fsig -> [(fsig ^. AST.funSigName,  ScopedFun fsig)]
     AST.BuiltinVar vsig -> [(vsig ^. AST.varSigName,  ScopedVar vsig)]
@@ -121,12 +122,23 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
 
   checkDecl (AST.DeclImport i) = pure (AST.DeclImport i)
   checkDecl (AST.DeclFun fd) = AST.DeclFun <$> checkFun fd
+  checkDecl (AST.DeclVar vd) = AST.DeclVar <$> checkVar vd
+  checkDecl (AST.DeclRec r) = AST.DeclRec <$> checkRec r
   checkDecl (AST.DeclBuiltin bi) = AST.DeclBuiltin <$> checkBuiltin bi
 
   checkFun (AST.FunDecl sig stmts) = localScope $ do
     sig' <- checkFunSig sig
     stmts' <- enterDecl (sig ^. AST.funSigName) $ mapM checkStmt stmts
     return (AST.FunDecl sig' stmts')
+
+  checkVar (AST.VarDecl sig init) = do
+    sig' <- checkVarSig sig
+    init' <- enterDecl (sig ^. AST.varSigName) $ checkExpr init
+    return (AST.VarDecl sig' init')
+
+  checkRec (AST.RecDecl vis name gens vars) = localScope $ enterDecl name $ do
+    insertGenerics gens
+    AST.RecDecl vis name gens <$> traverse checkVarSig vars
 
   checkName desc mapLens n = do
     scope <- use mapLens
@@ -151,12 +163,14 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
   checkParam (AST.Param ty name expr) = AST.Param <$> checkType ty <*> pure name <*> traverse checkExpr expr
 
   checkExpr (AST.EVar v) = AST.EVar <$> checkTermName v
-  checkExpr (AST.EAccessor e field) = AST.EAccessor <$> checkExpr e <*> pure field
-  checkExpr (AST.EIndex e eidx) = AST.EIndex <$> checkExpr e <*> checkExpr eidx
+  checkExpr (AST.EAccessor e _ field) = AST.EAccessor <$> checkExpr e <*> pure Nothing <*> pure field
+  checkExpr (AST.EIndex e _ eidx) = AST.EIndex <$> checkExpr e <*> pure Nothing <*> checkExpr eidx
   checkExpr (AST.EOp e1 op e2) = AST.EOp <$> checkExpr e1 <*> pure op <*> checkExpr e2
   checkExpr (AST.ECall f tyargs args) = AST.ECall <$> checkExpr f <*> traverse checkType tyargs <*> traverse checkExpr args
   checkExpr (AST.EScalar d) = pure $ AST.EScalar d
   checkExpr (AST.EString s) = pure $ AST.EString s
+  checkExpr (AST.EUnknown) = pure $ AST.EUnknown
+  checkExpr (AST.ERecordInit name tyArgs fields) = AST.ERecordInit <$> checkTypeName name <*> traverse checkType tyArgs <*> mapMOf (traversed . _2) checkExpr fields
 
   checkStmt (AST.SDeclVar ty name init) = do
     insertLocalVars [name]
@@ -211,3 +225,6 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
 
   insertGenerics = traverse_ $ \v -> typeScope . at (AST.RawName [v]) .= Just (AST.ScopedLocal v)
   insertLocalVars = traverse_ $ \v -> termScope . at (AST.RawName [v]) .= Just (AST.ScopedLocal v)
+
+makeRecordSig :: AST.RecDecl name -> AST.StructSig name
+makeRecordSig (AST.RecDecl vis name gens vars) = AST.StructSig vis name gens Nothing (map AST.FieldVarSig vars)

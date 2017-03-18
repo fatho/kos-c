@@ -2,6 +2,15 @@ module Examples::AutoPilot;
 
 import Builtin unqualified;
 
-public Void Init() {
+record Options {
+  Scalar cruiseSpeed;
+  Scalar takeOffSpeed;
+}
 
+public Scalar Test(Options opts) {
+  return opts.cruiseSpeed + opts.takeOffSpeed;
+}
+
+public Void Init() {
+  Options opts = Options { cruiseSpeed = 800, takeOffSpeed = 300 };
 }

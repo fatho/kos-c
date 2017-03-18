@@ -16,6 +16,8 @@ public A Lookup<A>(List<A> list, Scalar index) {
   return list[index];
 }
 
+Scalar globalVar = 2;
+
 public Void Main() {
   Scalar x = 3;
   Scalar y = Id<Scalar>(2);
@@ -23,6 +25,7 @@ public Void Main() {
   {
     Scalar z = Add23(y + 1, 2, 3);
   }
-  // x.TypeName = "Foo";
+  globalVar = globalVar + 2;
+  String s = x.TypeName;
   AP::Init();
 }

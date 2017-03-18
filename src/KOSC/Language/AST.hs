@@ -40,6 +40,8 @@ type RawModule = Module RawName
 data Decl name
   = DeclImport ImportDecl
   | DeclFun (FunDecl name)
+  | DeclVar (VarDecl name)
+  | DeclRec (RecDecl name)
   | DeclBuiltin (Builtin name)
   deriving (Read, Show)
 
@@ -108,18 +110,33 @@ data FunDecl name = FunDecl
   }
   deriving (Read, Show)
 
+-- | Declaration of a global variable.
+data VarDecl name = VarDecl
+  { _varDeclSignature   :: VarSig name
+  , _varDeclInitializer :: Expr name
+  } deriving (Read, Show)
+
+-- | Declaration of a record type
+data RecDecl name = RecDecl
+  { _recDeclVisibility :: Visibility
+  , _recDeclName       :: Ident
+  , _recDeclGenerics   :: [Ident]
+  , _recDeclVars       :: [VarSig name]
+  } deriving (Read, Show)
+
 data Op = OpPlus | OpMinus | OpMult | OpDiv
   deriving (Read, Show)
 
 -- | Expressions (distinguishing between lvalues and rvalues is done at a later stage).
 data Expr name
   = EVar name
-  | EAccessor (Expr name) Ident
-  | EIndex (Expr name) (Expr name)
+  | EAccessor (Expr name) (Maybe (Type name)) Ident
+  | EIndex (Expr name) (Maybe (Type name)) (Expr name)
   | EOp (Expr name) Op (Expr name)
   | ECall (Expr name) [Type name] [(Expr name)]
   | EScalar Double
   | EString String
+  | ERecordInit name [Type name] [(Ident, Expr name)]
   | EUnknown -- ^ used as a placeholder in optional parameters of builtin declarations
   deriving (Read, Show)
 
@@ -136,6 +153,8 @@ data Stmt name
 
 makeLenses ''Module
 makeLenses ''FunDecl
+makeLenses ''VarDecl
+makeLenses ''RecDecl
 makeLenses ''ImportDecl
 makeLenses ''FunSig
 makeLenses ''VarSig
@@ -181,3 +200,8 @@ isArithmeticOp OpMinus = True
 isArithmeticOp OpMult  = True
 isArithmeticOp OpDiv   = True
 
+makeGlobalName :: ModuleName -> Ident -> ScopedName
+makeGlobalName modName ident = ScopedGlobal (moduleNameParts modName ++ [ident])
+
+makeRawName :: ModuleName -> Ident -> RawName
+makeRawName modName ident = RawName (moduleNameParts modName ++ [ident])

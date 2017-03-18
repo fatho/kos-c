@@ -45,8 +45,8 @@ compile hooks mainModule = do
   imports <- resolveImports (resolveImport hooks) mainModule
   scopedMods <- iforM (imports ^. importResolutionModules) $
                 \modName mod -> scopeChecker imports (mod ^. moduleInfoAST)
-  forM_ scopedMods $ \mod -> typeChecker scopedMods mod
-  return scopedMods
+  typedMods <- forM scopedMods $ \mod -> typeChecker scopedMods mod
+  return typedMods
 
 -- * File Based Compiler
 

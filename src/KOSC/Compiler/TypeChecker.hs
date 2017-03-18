@@ -39,7 +39,8 @@ data TypeEnv = TypeEnv
 
 makeLenses ''TypeEnv
 
-typeChecker :: Monad m => Map AST.ModuleName ScopedModule -> ScopedModule -> KOSCCompilerT m ()
+-- | Type checks a module and adds some extra information in the AST.
+typeChecker :: Monad m => Map AST.ModuleName ScopedModule -> ScopedModule -> KOSCCompilerT m ScopedModule
 typeChecker imports inputMod = evalStateT checkModule initialEnv where
   initialEnv = TypeEnv Map.empty Nothing
 
@@ -48,48 +49,55 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
   checkModule = do
     populateGlobalTypeEnv imports
     enterModule (inputMod ^. scopedModuleAST . AST.moduleName) $
-      mapMOf_ (scopedModuleAST . AST.declarations . folded) checkDecl inputMod
+      mapMOf (scopedModuleAST . AST.declarations . traversed) checkDecl inputMod
 
-  checkDecl (AST.DeclImport _) = pure ()
-  checkDecl (AST.DeclFun fdecl) = checkFunDecl fdecl
-  checkDecl (AST.DeclBuiltin _) = pure ()
+  checkDecl (AST.DeclFun fdecl) = AST.DeclFun <$> checkFunDecl fdecl
+  checkDecl (AST.DeclVar vdecl) = AST.DeclVar <$> checkVarDecl vdecl
+  checkDecl other = return other
 
   checkFunDecl (AST.FunDecl sig body) = enterScope $ enterDecl (sig ^. AST.funSigName) $ do
     buildFunctionEnv sig
-    mapM_ checkStmt body
+    AST.FunDecl sig <$> mapM checkStmt body
+
+  checkVarDecl (AST.VarDecl sig init) = enterDecl (sig ^. AST.varSigName) $ do
+    let TypeScheme declGen declTy declAccess = varSigToTypeScheme sig
+    (init', initTy) <- inferExpr init
+    requireType (TypeScheme declGen declTy AST.Get) initTy
+    return $ AST.VarDecl sig init'
 
   -- checks that an expression is correct and infers its type
-  inferExpr (AST.EVar v) = use (typeMap . at v) >>= \case
+  inferExpr e@(AST.EVar v) = use (typeMap . at v) >>= \case
     Nothing -> criticalWithContext $ MessageUnspecified $ PP.text "Undeclared variable found in type checker. This is a bug. Did the program pass the scope checker?"
-    Just scheme -> return scheme
-  inferExpr (AST.EAccessor e field) = do
-    tysc@(TypeScheme _ _ access) <- inferExpr e
+    Just scheme -> return (e, scheme)
+  inferExpr (AST.EAccessor e _ field) = do
+    (e', tysc@(TypeScheme _ _ access)) <- inferExpr e
     ty <- requireNonGeneric tysc
     requireAccess AST.Get access
-    findField field ty ty
-  inferExpr (AST.EIndex e eidx) =  do
-    indexedTySc@(TypeScheme _ _ access) <- inferExpr e
+    fty <- findField field ty ty
+    return $ (AST.EAccessor e' (Just ty) field, fty)
+  inferExpr (AST.EIndex e _ eidx) =  do
+    (e', indexedTySc@(TypeScheme _ _ access)) <- inferExpr e
     indexedTy <- requireNonGeneric indexedTySc
     requireAccess AST.Get access
-    indexTy <- inferExpr eidx
+    (eidx', indexTy) <- inferExpr eidx
     TypeScheme [] idxField idxAccess <- findField "[]" indexedTy indexedTy
     case idxField of
       AST.TypeFunction idxRet [reqIdxTy] _ -> do
         requireType (TypeScheme [] reqIdxTy AST.Get) indexTy
-        return $ TypeScheme [] idxRet idxAccess
-      _ -> return $ TypeScheme [] unknownType idxAccess
+        return (AST.EIndex e' (Just indexedTy) eidx', TypeScheme [] idxRet idxAccess)
+      _ -> return (AST.EIndex e' (Just unknownType) eidx', TypeScheme [] unknownType idxAccess)
   inferExpr (AST.EOp e1 op e2)
     | AST.isArithmeticOp op = do
-        ty1 <- inferExpr e1
-        ty2 <- inferExpr e2
+        (e1', ty1) <- inferExpr e1
+        (e2', ty2) <- inferExpr e2
         let getscalar = TypeScheme [] scalarType AST.Get
         requireType getscalar ty1
         requireType getscalar ty2
-        return getscalar
-    | otherwise = return $ TypeScheme [] unknownType AST.GetOrSet
+        return (AST.EOp e1' op e2', getscalar)
+    | otherwise = error "not implemented yet" --return (AST.EOp e1 op e2, TypeScheme [] unknownType AST.GetOrSet)
   inferExpr (AST.ECall f tyargs args) = do
     -- infer type of the called function
-    TypeScheme generics ty access <- inferExpr f
+    (f', TypeScheme generics ty access) <- inferExpr f
     requireAccess AST.Get access
     -- number of generics must match
     when (length tyargs /= length generics) $ messageWithContext MessageError $ MessageGenericTypeMismatch
@@ -102,34 +110,48 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
         when (length args > length manTys + length optTys) $
           messageWithContext MessageError $ MessageTooManyArguments
         -- match arguments individually
-        argTys <- traverse inferExpr args
+        (args', argTys) <- unzip <$> traverse inferExpr args
         zipWithM_ requireType (map (\t -> TypeScheme [] (substituteGenerics gensubst t) AST.Get) $ manTys ++ optTys) argTys
-        return $ TypeScheme [] (substituteGenerics gensubst retTy) AST.Get
+        return (AST.ECall f' tyargs args', TypeScheme [] (substituteGenerics gensubst retTy) AST.Get)
       other -> do
         messageWithContext MessageError $ MessageFunctionExpected other
-        return $ TypeScheme [] (AST.TypeGeneric (AST.ScopedLocal "__UNKNOWN__") []) AST.Get
-  inferExpr (AST.EScalar d) = pure $ TypeScheme [] scalarType AST.Get
-  inferExpr (AST.EString s) = pure $ TypeScheme [] stringType AST.Get
+        return (AST.ECall f' tyargs args, TypeScheme [] (AST.TypeGeneric (AST.ScopedLocal "__UNKNOWN__") []) AST.Get)
+  inferExpr e@(AST.EScalar d) = return (e, TypeScheme [] scalarType AST.Get)
+  inferExpr e@(AST.EString s) = return (e, TypeScheme [] stringType AST.Get)
+  inferExpr e@(AST.EUnknown) = return (e, TypeScheme [] unknownType AST.GetOrSet)
+  inferExpr e@(AST.ERecordInit recName tyArgs fields) = do
+    let recTy = AST.TypeGeneric recName tyArgs
+    fields' <- forM fields $ \(name, expr) -> do
+      fty <- findField name recTy recTy
+      (expr', ety) <- inferExpr expr
+      requireType fty ety
+      return (name, expr')
+    return (AST.ERecordInit recName tyArgs fields, TypeScheme [] recTy AST.Get)
 
   -- checks that statements are correct
   checkStmt (AST.SDeclVar ty name init) = do
     let declty = TypeScheme [] ty AST.GetOrSet
     typeMap . at (AST.ScopedLocal name) .= Just declty
-    tyInit <- inferExpr init
+    (init', tyInit) <- inferExpr init
     requireType (TypeScheme [] ty AST.Get) tyInit
+    return $ AST.SDeclVar ty name init'
   checkStmt (AST.SAssign lhs rhs) = do
-    (TypeScheme gen lhsty lhsaccess) <- inferExpr lhs
-    rhsty <- inferExpr rhs
+    (lhs', TypeScheme gen lhsty lhsaccess) <- inferExpr lhs
+    (rhs', rhsty) <- inferExpr rhs
     -- require Set access on lhs, but get access on rhs
     requireAccess AST.Set lhsaccess
     requireType (TypeScheme gen lhsty AST.Get) rhsty
-  checkStmt (AST.SReturn ret) = use requiredReturnType >>= \case
-    Nothing -> messageWithContext MessageError $ MessageUnspecified $ PP.text "Cannot return from here"
+    return $ AST.SAssign lhs' rhs'
+  checkStmt s@(AST.SReturn ret) = use requiredReturnType >>= \case
+    Nothing -> do
+      messageWithContext MessageError $ MessageUnspecified $ PP.text "Cannot return from here"
+      return s
     Just retType -> do
-      actualType <- inferExpr ret
+      (ret', actualType) <- inferExpr ret
       requireType retType actualType
-  checkStmt (AST.SExpr ex) = void $ inferExpr ex -- just make sure some type IS can be inferred
-  checkStmt (AST.SBlock stmts) = enterScope $ mapM_ checkStmt stmts
+      return $ AST.SReturn ret'
+  checkStmt (AST.SExpr ex) = AST.SExpr . view _1 <$> inferExpr ex -- just make sure some type IS can be inferred
+  checkStmt (AST.SBlock stmts) = enterScope $ AST.SBlock <$> mapM checkStmt stmts
 
   -- searches a field of a type
   findField fieldName startedTy ty =

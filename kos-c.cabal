@@ -33,6 +33,7 @@ library
                      , transformers
                      , parsers
                      , text
+                     , interpolatedstring-perl6
                      , directory
                      , filepath
   default-language:    Haskell2010
