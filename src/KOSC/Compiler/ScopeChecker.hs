@@ -166,7 +166,7 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
   checkExpr (AST.ERecordInit name tyArgs fields) = AST.ERecordInit <$> checkTypeName name <*> traverse checkType tyArgs <*> mapMOf (traversed . _2) checkExpr fields
   checkExpr (AST.ECast ty e) = AST.ECast <$> checkType ty <*> checkExpr e
   checkExpr (AST.ELambda params ret body) = do
-    AST.FunSig _ ret' _ _ params' <- checkFunSig (AST.FunSig AST.Private ret "<<lambda>>" [] params)
+    AST.FunSig _ ret' _ _ params' _ <- checkFunSig (AST.FunSig AST.Private ret "<<lambda>>" [] params Nothing)
     AST.ELambda params' ret' <$> enterDecl "<<lambda>>" (localScope (traverse checkStmt body))
   checkExpr (AST.EAt e) = AST.EAt <$> checkExpr e -- should never occur at this stage, but this makes the warnings disappear
 
@@ -198,7 +198,7 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
   checkBuiltin (AST.BuiltinVar vsig) = AST.BuiltinVar <$> checkVarSig vsig
 
   -- checks a function signature and introduces local generic type variables and parameters
-  checkFunSig (AST.FunSig vis ret name gen params) = enterDecl name $ do
+  checkFunSig (AST.FunSig vis ret name gen params oname) = enterDecl name $ do
     insertGenerics gen
     ret' <- checkType ret
     checkOptParams params
@@ -208,7 +208,7 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
     forM_ pdupl $ \p -> messageWithContext MessageError $ MessageDuplicateParameter p
     params' <- mapM checkParam params
     insertLocalVars (map (view AST.paramName) params)
-    return $ AST.FunSig vis ret' name gen params'
+    return $ AST.FunSig vis ret' name gen params' oname
 
   -- checks whether all optional parameters occur at the end of the parameter list
   checkOptParams (p1 : p2 : ps) = do
@@ -226,7 +226,7 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
   checkFieldSig (AST.FieldVarSig vsig) = localScope $ AST.FieldVarSig <$> checkVarSig vsig
   checkFieldSig (AST.FieldIndexSig isig) = localScope $ AST.FieldIndexSig <$> checkIndexSig isig
 
-  checkVarSig (AST.VarSig vis ty name access) = enterDecl name $ AST.VarSig vis <$> checkType ty <*> pure name <*> pure access
+  checkVarSig (AST.VarSig vis ty name access outputName) = enterDecl name $ AST.VarSig vis <$> checkType ty <*> pure name <*> pure access <*> pure outputName
 
   checkIndexSig (AST.IndexSig vis ret arg name access) = enterDecl "[]" $ AST.IndexSig vis <$> checkType ret <*> checkType arg <*> pure name <*> pure access
 

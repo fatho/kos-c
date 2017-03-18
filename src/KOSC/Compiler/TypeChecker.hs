@@ -57,13 +57,17 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
   -- checks that an expression is correct and infers its type
   inferExpr e@(AST.EVar v) = use (typeMap . at v) >>= \case
     Nothing -> criticalWithContext $ MessageUnspecified $ PP.text "Undeclared variable found in type checker. This is a bug. Did the program pass the scope checker?"
-    Just scheme -> return (e, scheme)
+    Just scheme
+      | isFunctionScheme scheme -> return (AST.EAt e, scheme)
+      | otherwise -> return (e, scheme)
   inferExpr (AST.EAccessor e _ field) = do
     (e', tysc@(TypeScheme _ _ access)) <- inferExpr e
     ty <- requireNonGeneric tysc
     requireAccess AST.Get access
     fty <- findField field ty ty
-    return $ (AST.EAccessor e' (Just ty) field, fty)
+    if isFunctionScheme fty
+      then return $ (AST.EAt (AST.EAccessor e' (Just ty) field), fty)
+      else return $ (AST.EAccessor e' (Just ty) field, fty)
   inferExpr (AST.EIndex e _ eidx) =  do
     (e', indexedTySc@(TypeScheme _ _ access)) <- inferExpr e
     indexedTy <- requireNonGeneric indexedTySc
@@ -113,7 +117,10 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
         -- match arguments individually
         (args', argTys) <- unzip <$> traverse inferExpr args
         zipWithM_ requireType (map (\t -> TypeScheme [] (substituteGenerics gensubst t) AST.Get) $ manTys ++ optTys) argTys
-        return (AST.ECall f' tyargs args', TypeScheme [] (substituteGenerics gensubst retTy) AST.Get)
+        let fNoAt = case f' of
+              AST.EAt e -> e
+              _ -> f'
+        return (AST.ECall fNoAt tyargs args', TypeScheme [] (substituteGenerics gensubst retTy) AST.Get)
       other -> do
         messageWithContext MessageError $ MessageFunctionExpected other
         return (AST.ECall f' tyargs args, TypeScheme [] (AST.TypeGeneric (AST.ScopedLocal "__UNKNOWN__") []) AST.Get)
@@ -133,7 +140,7 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
     _ <- requireNonGeneric ts
     return (AST.ECast ty e', TypeScheme [] ty acc)
   inferExpr (AST.ELambda params ret body) = enterScope $ enterDecl "<<lambda>>" $ do
-    let lambdasig = AST.FunSig AST.Private ret "<<lambda>>" [] params
+    let lambdasig = AST.FunSig AST.Private ret "<<lambda>>" [] params Nothing
     buildFunctionEnv lambdasig
     body' <- mapM checkStmt body
     return (AST.ELambda params ret body', funSigToTypeScheme lambdasig)
@@ -253,7 +260,8 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
 
   operatorOverloads binOp = case binOp of
     AST.BinOpPlus -> [(scalarType, scalarType, scalarType)
-                     ,(vectorType, vectorType, vectorType)]
+                     ,(vectorType, vectorType, vectorType)
+                     ,(stringType, stringType, stringType)]
     AST.BinOpMinus -> [(scalarType, scalarType, scalarType)
                      ,(vectorType, vectorType, vectorType)]
     AST.BinOpMult -> [(scalarType, scalarType, scalarType)
@@ -288,6 +296,10 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
     r <- action
     put env
     return r
+
+isFunctionScheme :: TypeScheme -> Bool
+isFunctionScheme (TypeScheme _ (AST.TypeFunction _ _ _) _) = True
+isFunctionScheme _ = False
 
 requireNonGeneric :: MonadCompiler MessageContent m => TypeScheme -> m (AST.Type AST.ScopedName)
 requireNonGeneric (TypeScheme [] ty _) = pure ty

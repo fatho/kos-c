@@ -91,13 +91,13 @@ generateIfRequired sname = use (generatedNames . at sname) >>= \case
       Fun fdef -> do
         -- it is important to FIRST generate and register the name, and then start generating the function body
         -- otherwise, this would fail for recursive functions
-        name <- freshName
+        name <- maybe freshName (pure . L.pack) (fdef ^. AST.funDeclSignature . AST.funSigOutputName)
         generatedNames . at sname .= Just name
         fcode <- enterDecl (fdef ^. AST.funDeclSignature . AST.funSigName) $ generateFunction name fdef
         generatedCode . at sname .= Just fcode
         return name
       Var vdef -> do
-        name <- freshName
+        name <- maybe freshName (pure . L.pack) (vdef ^. AST.varDeclSignature . AST.varSigOutputName)
         generatedNames . at sname .= Just name
         vcode <- enterDecl (vdef ^. AST.varDeclSignature . AST.varSigName) $ generateVar name vdef
         generatedCode . at sname .= Just vcode

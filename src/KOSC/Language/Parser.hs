@@ -221,13 +221,14 @@ funSigP = FunSig <$> option Public visibilityP
            <*> ident varStyle -- name
            <*> option [] (angles $ commaSep $ ident varStyle) -- generic parameters
            <*> parens (commaSep paramP) -- parameters
+           <*> optional stringLiteral
 
 varSigP :: KOSCParser (VarSig RawName)
 varSigP = VarSig <$> option Public visibilityP
            <*> typeP
            <*> ident varStyle
            <*> accessibilityP
-
+           <*> optional stringLiteral
 
 indexSigP :: KOSCParser (IndexSig RawName)
 indexSigP = IndexSig <$> option Public visibilityP

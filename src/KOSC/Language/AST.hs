@@ -82,6 +82,7 @@ data VarSig name = VarSig
   , _varSigType       :: Type name
   , _varSigName       :: Ident
   , _varSigAccess     :: Accessibility
+  , _varSigOutputName :: Maybe String
   } deriving (Read, Show)
 
 -- | Structure signature, consisting of its name, its super structure and its fields
@@ -100,6 +101,7 @@ data FunSig name = FunSig
   , _funSigName       :: Ident
   , _funSigGenerics   :: [Ident]
   , _funSigParameters :: [Param name]
+  , _funSigOutputName :: Maybe String
   }
   deriving (Show, Read)
 
