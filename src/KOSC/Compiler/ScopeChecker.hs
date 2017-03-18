@@ -168,6 +168,7 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
   checkExpr (AST.ELambda params ret body) = do
     AST.FunSig _ ret' _ _ params' <- checkFunSig (AST.FunSig AST.Private ret "<<lambda>>" [] params)
     AST.ELambda params' ret' <$> enterDecl "<<lambda>>" (localScope (traverse checkStmt body))
+  checkExpr (AST.EAt e) = AST.EAt <$> checkExpr e -- should never occur at this stage, but this makes the warnings disappear
 
   checkStmt (AST.SDeclVar ty name init) = do
     insertLocalVars [name]

@@ -197,6 +197,9 @@ generateExpression e = go 0 e where
     AST.EUnknown -> criticalWithContext $ MessageUnspecified $ PP.text "Encountered unknown expression in code generator. This is a bug."
     AST.ECast _ e -> go outerPrec e
     AST.ELambda params _ body -> generateFunctionBody params body
+    AST.EAt e -> do
+      ecode <- go outerPrec e
+      return [qq|$ecode@|]
 
 generateStatements :: Monad m => [AST.Stmt AST.ScopedName] -> CodeGenM m L.Text
 generateStatements stmts = L.concat <$> traverse generateStatement stmts

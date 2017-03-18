@@ -146,6 +146,7 @@ data Expr name
   | EUnknown -- ^ used as a placeholder in optional parameters of builtin declarations
   | ECast (Type name) (Expr name)
   | ELambda [Param name] (Type name) [Stmt name]
+  | EAt (Expr name) -- ^ used to indicate a function reference, this is inserted by the type checker and not part of the front-end syntax
   deriving (Read, Show)
 
 -- | Statements

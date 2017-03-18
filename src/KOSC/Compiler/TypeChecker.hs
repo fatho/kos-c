@@ -137,6 +137,9 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
     buildFunctionEnv lambdasig
     body' <- mapM checkStmt body
     return (AST.ELambda params ret body', funSigToTypeScheme lambdasig)
+  inferExpr (AST.EAt e) = do
+    (e', ety) <- inferExpr e
+    return (AST.EAt e', ety)
 
   -- checks that statements are correct
   checkStmt (AST.SDeclVar ty name init) = do
