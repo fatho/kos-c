@@ -3,6 +3,8 @@
  */
 module KOS::Builtin;
 
+import KOS::Collections unqualified;
+
 /** The void type is used to signify functions that do not return anything.
  *  It is therefore no sub-type of structure, unlike most other types.
  */
@@ -23,11 +25,35 @@ builtin structure Structure {
 builtin structure Scalar : Structure {}
 
 /// This is the type assigned to string literals.
-builtin structure String : Structure {}
+builtin structure String : Structure {
+  Boolean Contains(String other);
+  Boolean EndsWith(String other);
+  Scalar Find(String other);
+  Scalar FindAt(String other, Scalar startAt);
+  Scalar FindLast(String other);
+  Scalar FindLastAt(String other, Scalar startAt);
+  Scalar IndexOf(String other);
+  String Insert(Scalar index, String other);
+  Scalar LastIndexOf(String other);
+  Scalar Length get;
+  String PadLeft(Scalar width);
+  String PadRight(Scalar width);
+  String Remove(Scalar index, Scalar count);
+  String Replace(String old, String new);
+  List<String> Split(String sep);
+  Boolean StartsWith(String other);
+  String Substring(Scalar start, Scalar count);
+  String ToLower();
+  String ToUpper();
+  String Trim();
+  String TrimEnd();
+  String TrimStart();
+  Scalar ToNumber(Scalar defaultIfError);
+  Scalar ToScalar(Scalar defaultIfError);
+}
 
 /// This is the type if/until/etc. conditions are checked against.
 builtin structure Boolean : Structure {}
 
 builtin Boolean True get;
 builtin Boolean False get;
-

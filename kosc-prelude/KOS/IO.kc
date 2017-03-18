@@ -1,0 +1,5 @@
+module KOS::IO;
+
+import KOS::Builtin unqualified;
+
+builtin Void Print(String str);

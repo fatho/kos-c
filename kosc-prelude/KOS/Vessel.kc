@@ -1,0 +1,191 @@
+module KOS::Vessel;
+
+import KOS::Builtin unqualified;
+import KOS::Collections unqualified;
+import KOS::Math unqualified;
+
+builtin Vessel Ship get;
+
+builtin structure Vessel {
+  Control Control get;
+  Scalar Bearing get;
+  Scalar Heading get;
+  Scalar MaxThrust get;
+  Scalar MaxThrustAt(Scalar pressure);
+  Scalar AvailableThrust get;
+  Scalar AvailableThrustAt(Scalar pressure);
+  Direction Facing get;
+  Scalar Mass get;
+  Scalar WetMass get;
+  Scalar DryMass get;
+  Scalar DynamicPressure get;
+  Scalar Q get;
+  Scalar VerticalSpeed get;
+  Scalar GroundSpeed get;
+  Scalar AirSpeed get;
+  Scalar TermVelocity get;
+  String ShipName;
+  String Status get; // TODO: enum
+  String Type; // TODO: enum
+  Vector AngularMomentum get;
+  Vector AngularVel get;
+  VesselSensors Sensors get;
+  Boolean Loaded get;
+  Boolean Unpacked get;
+  // TODO LoadDistance LoadDistance get;
+  Boolean IsDead get;
+  //TODO List<Orbit> Patches get;
+  Part RootPart get;
+  Part ControlPart get;
+  List<Part> Parts get;
+  List<DockingPort> DockingPorts get;
+  List<Element> Elements get;
+  List<AggregateResource> Resources get;
+  List<Part> PartsNamed(String title);
+  List<Part> PartsTagged(String tag);
+  List<Part> PartsDubbged(String dub);
+  List<PartModule> ModulesNamed(String name);
+  List<Part> PartsInGroup(Scalar ag);
+  List<PartModule> ModulesInGroup(Scalar ag);
+  List<Part> AllPartsTagged get;
+  Scalar CrewCapacity get;
+  List<CrewMember> Crew get;
+  // TODO Connection Connection get;
+  // TODO MessageQueue Messages get;
+}
+
+builtin structure Control {
+  Scalar MainThrottle;
+  Scalar Yaw;
+  Scalar Pitch;
+  Scalar Roll;
+  Vector Rotation;
+  Scalar YawTrim;
+  Scalar PitchTrim;
+  Scalar RollTrim;
+  Scalar Fore;
+  Scalar StarBoard;
+  Scalar Top;
+  Vector Translation;
+  Scalar WheelSteer;
+  Scalar WheelThrottle;
+  Scalar WheelSteerTrim;
+  Scalar WheelThrottleTrim;
+  Boolean Neutral;
+  Boolean Neutralize set;
+  Scalar PilotMainThrottle;
+  Scalar PilotYaw get;
+  Scalar PilotPitch get;
+  Scalar PilotRoll get;
+  Vector PilotRotation get;
+  Scalar PilotYawTrim get;
+  Scalar PilotPitchTrim get;
+  Scalar PilotRollTrim get;
+  Scalar PilotFore get;
+  Scalar PilotStarBoard get;
+  Scalar PilotTop get;
+  Vector PilotTranslation get;
+  Scalar PilotWheelSteer get;
+  Scalar PilotWheelThrottle get;
+  Scalar PilotWheelSteerTrim get;
+  Scalar PilotWheelThrottleTrim get;
+  Boolean PilotNeutral get;
+}
+
+
+builtin structure CrewMember {
+  String Name get;
+  String Gender get; // TODO: enum
+  Scalar Experience get;
+  String Trait get; // TODO: enum
+  Boolean Tourist get;
+  Part Part get;
+}
+
+builtin structure Part {
+  String Name get;
+  String Title get;
+  Scalar Mass get;
+  Scalar WetMass get;
+  Scalar DryMass get;
+  String Tag;
+  Void ControlFrom();
+  Scalar Stage get;
+  String UID get;
+  Direction Rotation get;
+  Vector Position get;
+  Direction Facing get;
+  List<Resource> Resources get;
+  Boolean Targetable get;
+  Vessel Ship get;
+  PartModule GetModule(String name);
+  List<PartModule> Modules get;
+  Part Parent get;
+  Boolean HasPhysics get;
+  Boolean HasParent get;
+  List<Part> Children get;
+}
+
+builtin structure PartModule {
+  String Name get;
+  Part Part get;
+  List<String> AllFields get;
+  List<String> AllFieldNames get;
+  List<String> AllEvents get;
+  List<String> AllEventNames get;
+  List<String> AllActions get;
+  List<String> AllActionNames get;
+  A GetField<A>(String name);
+  Void SetField<A>(String name, A val);
+  Void DoEvent(String evt);
+  Void DoAction(String act);
+  Boolean HasField(String name);
+  Boolean HasEvent(String name);
+  Boolean HasAction(String name);
+}
+
+builtin structure Resource {
+  String Name get;
+  Scalar Amount get;
+  Scalar Density get;
+  Scalar Capacity get;
+  Boolean Toggleable get;
+  Boolean Enabled get;
+}
+
+builtin structure AggregateResource {
+  String Name get;
+  Scalar Amount get;
+  Scalar Capacity get;
+  List<Part> Parts get;
+}
+
+builtin structure Element {
+  String Name get;
+  String UID get;
+  List<Part> Parts get;
+  List<DockingPort> DockingPorts get;
+  Vessel Vessel get;
+  List<AggregateResource> Resources get;
+}
+
+builtin structure DockingPort : Part {
+  Scalar AcquireRange get;
+  Scalar AcquireForce get;
+  Scalar AcquireTorque get;
+  Scalar ReengagedDistance get;
+  String DockedShipName get;
+  Vector NodePosition get;
+  String NodeType get; // TODO: enum
+  Direction PortFacing get;
+  String State get; // TODO: enum
+  Void Undock();
+}
+
+builtin structure VesselSensors {
+  Vector Acc get;
+  Scalar Pres get;
+  Scalar Temp get;
+  Vector Grav get;
+  Scalar Light get;
+}

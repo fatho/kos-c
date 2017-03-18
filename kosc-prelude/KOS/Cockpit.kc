@@ -1,0 +1,77 @@
+module KOS::Cockpit;
+
+import KOS::Builtin unqualified;
+import KOS::Math unqualified;
+
+builtin Scalar Throttle;
+// the steering values accept more types in KOS Scripts, but due to the lack of overloading,
+// we're stuck with the most general ones here.
+builtin Direction Steering;
+builtin Scalar WheelSteering;
+
+//// ACTION GROUPS
+
+builtin Boolean RCS;
+builtin Boolean SAS;
+builtin String SASMode;
+builtin String NavMode;
+
+builtin Boolean Abort;
+builtin Boolean Gear;
+builtin Boolean Brakes;
+builtin Boolean Lights;
+
+builtin Boolean AG1;
+builtin Boolean AG2;
+builtin Boolean AG3;
+builtin Boolean AG4;
+builtin Boolean AG5;
+builtin Boolean AG6;
+builtin Boolean AG7;
+builtin Boolean AG8;
+builtin Boolean AG9;
+builtin Boolean AG10;
+
+builtin Boolean Legs;
+builtin Boolean Chutes;
+builtin Boolean ChutesSafe;
+builtin Boolean Panels;
+builtin Boolean Radiators;
+builtin Boolean Ladders;
+builtin Boolean Bays;
+builtin Boolean DeployDrills;
+builtin Boolean Drills;
+builtin Boolean FuelCells;
+builtin Boolean ISRU;
+builtin Boolean Intakes;
+
+builtin private String Target;
+
+Void SetTargetName(String tgt) {
+  Target = tgt;
+}
+// TODO: uncomment target setters and getters
+/*
+Void SetTargetShip(Ship ship) {
+  cast<Ship>(Target) = ship;
+}
+
+Void SetTargetBody(Body body) {
+  cast<Body>(Target) = body;
+}
+
+Void SetTargetPart(Part part) {
+  cast<Part>(Target) = part;
+}
+
+Ship GetTargetShip() {
+  return cast<Ship>(Target);
+}
+
+Body GetTargetBody() {
+  return cast<Body>(Target);
+}
+
+Part GetTargetPart() {
+  return cast<Part>(Target);
+}*/

@@ -1,0 +1,18 @@
+module KOS::Geography;
+
+import KOS::Builtin unqualified;
+import KOS::Math unqualified;
+
+builtin structure GeoCoordinates {
+  Scalar Lat get;
+  Scalar Lng get;
+  Scalar Distance get;
+  Scalar TerrainHeight get;
+  Scalar Heading get;
+  Scalar Bearing get;
+  Vector Position get;
+  Vector AltitudePosition(Scalar alt);
+  // TODO: OrbitableVelocity
+}
+
+builtin GeoCoordinates LatLng(Scalar lat, Scalar lng);
