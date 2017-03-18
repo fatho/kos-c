@@ -57,3 +57,7 @@ builtin structure Boolean : Structure {}
 
 builtin Boolean True get;
 builtin Boolean False get;
+
+builtin structure Record<A> {
+  A Copy();
+}

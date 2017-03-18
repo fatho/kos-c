@@ -150,7 +150,11 @@ generateExpression e = go 0 e where
     return $ precParens outerPrec 10 [qq|$acode:$field|]
 
   goRecordAccessor outerPrec accessed record field = case elemIndex field $ toListOf (AST.recDeclVars . folded . AST.varSigName) record of
-    Nothing -> criticalWithContext $ MessageUnspecified $ PP.text "Encountered unknown record field in code generator. This is a bug."
+    Nothing
+      | field == "Copy" -> do
+        acode <- go 10 accessed
+        return $ precParens outerPrec 10 [qq|$acode:$field|]
+      | otherwise -> criticalWithContext $ MessageUnspecified $ PP.text "Encountered unknown record field in code generator. This is a bug."
     Just idx -> do
       acode <- go 10 accessed
       return $ precParens outerPrec 10 [qq|$acode[$idx]|]

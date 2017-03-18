@@ -98,7 +98,7 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
   scopedTypeExport (AST.DeclImport _) = []
   scopedTypeExport (AST.DeclFun _) = []
   scopedTypeExport (AST.DeclVar _) = []
-  scopedTypeExport (AST.DeclRec r) = [ (r ^. AST.recDeclName, ScopedStruct $ makeRecordSig r) ]
+  scopedTypeExport (AST.DeclRec r) = [ (r ^. AST.recDeclName, ScopedStruct $ makeRecordSig inputModuleName r) ]
   scopedTypeExport (AST.DeclBuiltin bi) = case bi of
     AST.BuiltinStruct sig -> [(sig ^. AST.structSigName, ScopedStruct sig)]
     _ -> []
@@ -247,5 +247,7 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
   insertGenerics = traverse_ $ \v -> typeScope . at (AST.RawName [v]) .= Just (AST.ScopedLocal v)
   insertLocalVars = traverse_ $ \v -> termScope . at (AST.RawName [v]) .= Just (AST.ScopedLocal v)
 
-makeRecordSig :: AST.RecDecl name -> AST.StructSig name
-makeRecordSig (AST.RecDecl vis name gens vars) = AST.StructSig vis name gens Nothing (map AST.FieldVarSig vars)
+makeRecordSig :: AST.ModuleName -> AST.RecDecl AST.ScopedName -> AST.StructSig AST.ScopedName
+makeRecordSig modName (AST.RecDecl vis name gens vars) = AST.StructSig vis name gens super (map AST.FieldVarSig vars) where
+  super = Just $ AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Builtin", "Record"]) [AST.TypeGeneric recFullName []]
+  recFullName = AST.ScopedGlobal (AST.moduleNameParts modName ++ [name])
