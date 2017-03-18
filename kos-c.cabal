@@ -17,6 +17,7 @@ library
   hs-source-dirs:      src
   exposed-modules:     KOSC.Language.AST
                        KOSC.Language.Parser
+                       KOSC.Compiler
                        KOSC.Compiler.Common
                        KOSC.Compiler.Monad
                        KOSC.Compiler.Errors
@@ -50,6 +51,7 @@ executable kos-c-exe
                      , directory
                      , ansi-wl-pprint
                      , trifecta
+                     , text
                      , kos-c
   default-language:    Haskell2010
 
