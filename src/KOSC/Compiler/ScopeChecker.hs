@@ -145,7 +145,6 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
 
   checkTermName = checkName "Variable" termScope
 
-  checkType (AST.TypeName n) = AST.TypeName <$> checkTypeName n
   checkType (AST.TypeGeneric n args) = AST.TypeGeneric <$> checkTypeName n <*> traverse checkType args
   checkType (AST.TypeFunction ret args opts) = AST.TypeFunction <$> checkType ret <*> traverse checkType args <*> traverse checkType opts
 

@@ -12,12 +12,17 @@ public Scalar Add23(Scalar x, Scalar y, Scalar z = 0) {
   return x + y + z;
 }
 
+public A Lookup<A>(List<A> list, Scalar index) {
+  return list[index];
+}
+
 public Void Main() {
   Scalar x = 3;
   Scalar y = Id<Scalar>(2);
   y = x * y;
   {
-    Scalar z = Add23(y + 1, 2, 3, 4);
+    Scalar z = Add23(y + 1, 2, 3);
   }
+  // x.TypeName = "Foo";
   AP::Init();
 }

@@ -3,7 +3,7 @@ module KOSC.Language.AST where
 
 import           Control.Lens
 import           Data.List
-import Data.Semigroup
+import           Data.Semigroup
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
 
 -- * AST
@@ -25,10 +25,10 @@ data ScopedName
   deriving (Eq, Ord, Read, Show)
 
 -- | Visibility of a declaration in a module
-data Visibility = Public | Private deriving (Read, Show)
+data Visibility = Public | Private deriving (Eq, Ord, Read, Show)
 
 -- | Accessibility of builtin variables or fields.
-data Accessibility = Get | Set | GetOrSet deriving (Read, Show)
+data Accessibility = Get | Set | GetOrSet deriving (Eq, Ord, Read, Show)
 
 data Module name = Module
   { _moduleName   :: ModuleName
@@ -51,8 +51,7 @@ data ImportDecl = ImportDecl
   deriving (Read, Show)
 
 data Type name
-  = TypeName name           -- ^ normal named type (can be a type variable)
-  | TypeGeneric name [Type name] -- ^ generic type instantiation
+  = TypeGeneric name [Type name] -- ^ generic type instantiation (when there are zero arguments, this is just a normal type)
   | TypeFunction (Type name) [Type name] [Type name] -- ^ function type with parameters and optional parameters separated
   deriving (Read, Show)
 
@@ -68,11 +67,11 @@ data FieldSig name = FieldFunSig (FunSig name) | FieldVarSig (VarSig name) | Fie
   deriving (Read, Show)
 
 data IndexSig name = IndexSig
-  { _indexSigVisibility    :: Visibility
-  , _indexSigReturnType    :: Type name
-  , _indexSigIndexType     :: Type name
-  , _indexSigIndexName     :: Ident
-  , _indexSigAccessibility :: Accessibility
+  { _indexSigVisibility :: Visibility
+  , _indexSigReturnType :: Type name
+  , _indexSigIndexType  :: Type name
+  , _indexSigIndexName  :: Ident
+  , _indexSigAccess     :: Accessibility
   } deriving (Read, Show)
 
 -- | Signature of a variable, consisting of its type, name, and accessibility
@@ -88,7 +87,7 @@ data StructSig name = StructSig
   { _structSigVisibility :: Visibility
   , _structSigName       :: Ident
   , _structSigGenerics   :: [Ident]
-  , _structSigDeriv      :: Maybe (Type name)
+  , _structSigSuper      :: Maybe (Type name)
   , _structSigFields     :: [FieldSig name]
   } deriving (Read, Show)
 
@@ -165,8 +164,7 @@ instance PP.Pretty ScopedName where
   pretty (ScopedAmbiguous parts) = PP.hcat (PP.punctuate (PP.comma PP.<> PP.space) (map (PP.text . intercalate "::") parts))
 
 instance PP.Pretty name => PP.Pretty (Type name) where
-  pretty (TypeName n) = PP.pretty n
-  pretty (TypeGeneric n args) = PP.pretty n PP.<> PP.tupled (map PP.pretty args)
+  pretty (TypeGeneric n args) = PP.pretty n PP.<> if not (null args) then PP.encloseSep PP.langle PP.rangle PP.comma (map PP.pretty args) else PP.empty
   pretty (TypeFunction ret args opts) = PP.pretty ret PP.<> PP.tupled (map PP.pretty args) PP.<> PP.list (map PP.pretty opts)
 
 -- * Helper Functions
@@ -178,7 +176,8 @@ isMandatory :: Param name -> Bool
 isMandatory = not . isOptional
 
 isArithmeticOp :: Op -> Bool
-isArithmeticOp OpPlus = True
+isArithmeticOp OpPlus  = True
 isArithmeticOp OpMinus = True
-isArithmeticOp OpMult = True
-isArithmeticOp OpDiv = True
+isArithmeticOp OpMult  = True
+isArithmeticOp OpDiv   = True
+

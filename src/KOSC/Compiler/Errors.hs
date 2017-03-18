@@ -34,6 +34,8 @@ data MessageContent
   | MessageGenericTypeMismatch
   | MessageNotEnoughArguments
   | MessageTooManyArguments
+  | MessageFieldNotFound (AST.Type AST.ScopedName) AST.Ident
+  | MessageWrongAccessibility AST.Accessibility
   deriving (Show)
 
 instance PP.Pretty MessageContent where
@@ -51,3 +53,8 @@ instance PP.Pretty MessageContent where
   pretty (MessageGenericTypeMismatch) = text "Number of generic parameters does not match."
   pretty (MessageNotEnoughArguments) = text "Not enough arguments provided to function call."
   pretty (MessageTooManyArguments) = text "Too many arguments provided to function call."
+  pretty (MessageFieldNotFound ty field) = text "Type" <+> squotes (pretty ty) <+> text "has no field" <+> squotes (pretty field)
+  pretty (MessageWrongAccessibility acc) = case acc of
+    AST.Get -> pretty "Expression must be gettable, but is only settable."
+    AST.Set -> pretty "Expression must be settable, but is only gettable."
+    AST.GetOrSet -> pretty "Expression must be both gettable and settable."

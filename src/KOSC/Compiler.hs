@@ -57,11 +57,10 @@ makeLenses ''FileBasedCompilerOptions
 
 parseModuleFile :: FilePath -> KOSCCompilerT IO (AST.Module AST.RawName)
 parseModuleFile filename = do
-  modparse <- Trifecta.parseFromFileEx (Parser.moduleP <* Trifecta.eof) filename
+  modparse <- Trifecta.parseFromFileEx (Parser.runKOSCParser $ Parser.moduleP <* Trifecta.eof) filename
   case modparse of
     Trifecta.Failure (Trifecta.ErrInfo doc _) -> do
-      messageWithContext MessageError (MessageUnspecified doc)
-      return (AST.Module (AST.ModuleName ["<not found>"]) [])
+      criticalWithContext (MessageUnspecified doc)
     Trifecta.Success mod                      -> return mod
 
 fileSystemImportResolver :: [FilePath] -> AST.ModuleName -> KOSCCompilerT IO (AST.Module AST.RawName)

@@ -9,8 +9,16 @@ builtin structure Structure {
 
 builtin structure Scalar : Structure {}
 builtin structure String : Structure {}
+builtin structure Boolean : Structure {}
 
 builtin structure Enumerable<A> : Structure {}
 builtin structure List<A> : Enumerable<A> {
   A [Scalar index];
 }
+
+
+
+builtin Boolean true get;
+builtin Boolean false get;
+
+builtin Boolean SAS;
