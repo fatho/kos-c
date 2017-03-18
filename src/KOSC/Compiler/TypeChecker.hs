@@ -96,14 +96,13 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
         return (AST.EOp e1' op e2', TypeScheme [] unknownType AST.Get)
       Just retTy -> return (AST.EOp e1' op e2', TypeScheme [] retTy AST.Get)
   inferExpr (AST.EUnOp op e) = do
-    (e', ty) <- inferExpr e
-    case op of
-      AST.UnOpNegate -> do
-        requireType (TypeScheme [] scalarType AST.Get) ty
-        return (AST.EUnOp op e', TypeScheme [] scalarType AST.Get)
-      AST.UnOpNot -> do
-        requireType (TypeScheme [] boolType AST.Get) ty
-        return (AST.EUnOp op e', TypeScheme [] boolType AST.Get)
+    (e', ts@(TypeScheme _ ty acc)) <- inferExpr e
+    requireAccess AST.Get acc
+    case findUnOp op ty of
+      Nothing -> do
+        messageWithContext MessageError $ MessageUnspecified $ PP.text "No matching operator found."
+        return (AST.EUnOp op e', TypeScheme [] unknownType AST.Get)
+      Just retTy -> return (AST.EUnOp op e', TypeScheme [] retTy AST.Get)
   inferExpr (AST.ECall f tyargs args) = do
     -- infer type of the called function
     (f', TypeScheme generics ty access) <- inferExpr f
@@ -221,6 +220,7 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
   stringType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Builtin", "String"]) []
   boolType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Builtin", "Boolean"]) []
   vectorType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Math", "Vector"]) []
+  directionType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Math", "Direction"]) []
   enumerableType a = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Collections", "Enumerable"]) [a]
   unknownType = AST.TypeGeneric (AST.ScopedLocal "__UNKNOWN__") []
 
@@ -240,6 +240,12 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
 
   findOp binOp ty1 ty2 = view _3 <$> find (\(a,b,_) -> a == ty1 && b == ty2) (operatorOverloads binOp)
 
+  unaryOperatorOverloads unOp = case unOp of
+    AST.UnOpNegate -> [(scalarType, scalarType), (vectorType, vectorType), (directionType, directionType)]
+    AST.UnOpNot -> [(boolType, boolType)]
+
+  findUnOp unOp ty = view _2 <$> find (\(a,_) -> a == ty) (unaryOperatorOverloads unOp)
+  
   -- saves current type environment and restores it on exit
   enterScope action = do
     env <- get
