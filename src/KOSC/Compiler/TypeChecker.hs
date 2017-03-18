@@ -7,16 +7,18 @@
 module KOSC.Compiler.TypeChecker where
 
 import           Control.Lens
-import Control.Monad
+import           Control.Monad
 import           Control.Monad.State
 import           Data.Foldable
 import           Data.Map.Strict              (Map)
 import qualified Data.Map.Strict              as Map
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
 
-import qualified KOSC.Language.AST                     as AST
-import KOSC.Compiler.Common
-import KOSC.Compiler.ScopeChecker
+import           KOSC.Compiler.Common
+import           KOSC.Compiler.ScopeChecker
+import qualified KOSC.Language.AST            as AST
+
+import           Debug.Trace
 
 data TypeScheme = TypeScheme [AST.Ident] (AST.Type AST.ScopedName) AST.Accessibility
 
@@ -40,7 +42,7 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
 
   checkDecl (AST.DeclFun fdecl) = AST.DeclFun <$> checkFunDecl fdecl
   checkDecl (AST.DeclVar vdecl) = AST.DeclVar <$> checkVarDecl vdecl
-  checkDecl other = return other
+  checkDecl other               = return other
 
   checkFunDecl (AST.FunDecl sig body) = enterScope $ enterDecl (sig ^. AST.funSigName) $ do
     buildFunctionEnv sig
@@ -194,11 +196,11 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
   checkStmt (AST.SOn cond body) = do
     (cond', TypeScheme _ _ acc) <- inferExpr cond
     requireAccess AST.Get acc
-    AST.SOn cond' <$> enterScope (traverse checkStmt body)
+    AST.SOn cond' <$> enterScope (requiredReturnType .= Just (TypeScheme [] boolType AST.Get) >> traverse checkStmt body)
   checkStmt (AST.SWhen cond body) = do
     (cond', condTy) <- inferExpr cond
     requireType (TypeScheme [] boolType AST.Get) condTy
-    AST.SWhen cond' <$> enterScope (traverse checkStmt body)
+    AST.SWhen cond' <$> enterScope (requiredReturnType .= Just (TypeScheme [] boolType AST.Get) >> traverse checkStmt body)
 
   -- searches a field of a type
   findField fieldName startedTy ty =
@@ -276,7 +278,7 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
     AST.UnOpNot -> [(boolType, boolType)]
 
   findUnOp unOp ty = view _2 <$> find (\(a,_) -> a == ty) (unaryOperatorOverloads unOp)
-  
+
   -- saves current type environment and restores it on exit
   enterScope action = do
     env <- get
@@ -303,16 +305,16 @@ requireAccess required actual = when (not $ hasAccess required actual) $
 
 hasAccess :: AST.Accessibility -> AST.Accessibility -> Bool
 hasAccess required actual = case required of
-  AST.Get -> actual /= AST.Set
-  AST.Set -> actual /= AST.Get
+  AST.Get      -> actual /= AST.Set
+  AST.Set      -> actual /= AST.Get
   AST.GetOrSet -> actual == AST.GetOrSet
 
 data Variance = Covariant | Contravariant | Invariant
 
 flipVariance :: Variance -> Variance
-flipVariance Covariant = Contravariant
+flipVariance Covariant     = Contravariant
 flipVariance Contravariant = Covariant
-flipVariance Invariant = Invariant
+flipVariance Invariant     = Invariant
 
 requireType :: MonadCompiler MessageContent m => TypeScheme -> TypeScheme -> StateT TypeEnv m ()
 requireType (TypeScheme gen1 ty1 acc1) (TypeScheme gen2 ty2 acc2)
@@ -360,8 +362,8 @@ isSubtypeOf = compareTypes where
     compareTypes _ _ _ = return False
 
     checkCast Invariant n1 args1 n2 args2 = return $ n1 == n2 && args1 == args2
-    checkCast Covariant n1 args1 n2 args2 = (n2, args2) `isSubStructOf` (n1, args1)
-    checkCast Contravariant n1 args1 n2 args2 = (n1, args1) `isSubStructOf` (n2, args2)
+    checkCast Covariant n1 args1 n2 args2 = (n1, args1) `isSubStructOf` (n2, args2)
+    checkCast Contravariant n1 args1 n2 args2 = (n2, args2) `isSubStructOf` (n1, args1)
 
 isSubStructOf :: MonadCompiler MessageContent m => (AST.ScopedName, [AST.Type AST.ScopedName]) -> (AST.ScopedName, [AST.Type AST.ScopedName]) -> StateT TypeEnv m Bool
 isSubStructOf (n1, tyargs1) (n2, tyargs2)

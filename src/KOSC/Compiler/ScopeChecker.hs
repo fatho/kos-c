@@ -190,7 +190,7 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
   checkStmt (AST.SLock var e) = AST.SLock <$> checkTermName var <*> checkExpr e
   checkStmt (AST.SUnlock var) = AST.SUnlock <$> traverse checkTermName var
   checkStmt (AST.SOn cond body) = AST.SOn <$> globalScope (checkExpr cond) <*> traverse checkStmt body
-  checkStmt (AST.SWhen cond body) = AST.SOn <$> globalScope (checkExpr cond) <*> traverse checkStmt body
+  checkStmt (AST.SWhen cond body) = AST.SWhen <$> globalScope (checkExpr cond) <*> traverse checkStmt body
 
   checkBuiltin (AST.BuiltinStruct ssig) = AST.BuiltinStruct <$> checkStructSig ssig
   checkBuiltin (AST.BuiltinFun fsig) = AST.BuiltinFun <$> checkFunSig fsig

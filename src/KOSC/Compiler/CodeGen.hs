@@ -93,13 +93,13 @@ generateIfRequired sname = use (generatedNames . at sname) >>= \case
         -- otherwise, this would fail for recursive functions
         name <- freshName
         generatedNames . at sname .= Just name
-        fcode <- generateFunction name fdef
+        fcode <- enterDecl (fdef ^. AST.funDeclSignature . AST.funSigName) $ generateFunction name fdef
         generatedCode . at sname .= Just fcode
         return name
       Var vdef -> do
         name <- freshName
         generatedNames . at sname .= Just name
-        vcode <- generateVar name vdef
+        vcode <- enterDecl (vdef ^. AST.varDeclSignature . AST.varSigName) $ generateVar name vdef
         generatedCode . at sname .= Just vcode
         return name
       BuiltinFun sig -> do
@@ -186,10 +186,11 @@ generateExpression e = go 0 e where
       Just (BuiltinStruct _) -> criticalWithContext $ MessageUnspecified $ PP.text "Cannot use record initializer on builtin structures. (FIXME: Move this check to type checker)"
       Just (Record r) -> do
         let fieldNames = toListOf (AST.recDeclVars . traversed . AST.varSigName) r
-            missingInitializers = map (view _1) fields
+            missingInitializers = fieldNames \\ map (view _1) fields
             dummyVal = AST.EScalar 0 -- dummy value for uninitialized fields
             initArgs = map (\v -> fromMaybe dummyVal $ lookup v fields ) fieldNames
-        messageWithContext MessageWarning $ MessageUninitializedIdentifiers missingInitializers
+        when (not $ null missingInitializers) $
+          messageWithContext MessageWarning $ MessageUninitializedIdentifiers missingInitializers
         argCode <- mapM (go 0) initArgs
         -- compile as list initializer
         return $ precParens outerPrec 10 [qq|list({L.intercalate "," argCode})|]
@@ -254,7 +255,7 @@ generateStatement s = case s of
   AST.SWhen cond body -> do
     ccode <- generateExpression cond
     bcode <- generateStatements body
-    return [qq|on $ccode \{$ln$bcode\}$ln|]
+    return [qq|when $ccode then \{$ln$bcode\}$ln|]
 
 generateFunction :: Monad m => GeneratedName -> AST.FunDecl AST.ScopedName -> CodeGenM m L.Text
 generateFunction actualName decl = do

@@ -99,7 +99,7 @@ accessorChainP = do
   let chain prev = do
         cur <- optional $ (EAccessor prev Nothing <$> (dot *> ident varStyle))
                <|> (EIndex prev Nothing <$> brackets exprP)
-               <|> (ECall prev <$> option [] (angles (commaSep typeP)) <*> parens (commaSep exprP))
+               <|> (try $ ECall prev <$> option [] (angles (commaSep typeP)) <*> parens (commaSep exprP))
         case cur of
           Just next -> chain next
           Nothing   -> return prev

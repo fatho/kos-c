@@ -31,6 +31,8 @@ Scalar globalVar = 2;
 
 builtin Enumerable<Scalar> test get;
 
+builtin Scalar Throttle;
+
 public Void Main() {
   Scalar x = 3;
   Scalar y = Id<Scalar>(2);
@@ -54,4 +56,26 @@ public Void Main() {
   Scalar d = v1 * v3;
 
   AP::Init();
+
+  lock Throttle = 1;
+  unlock all;
+
+  when (Throttle < 1) {
+    globalVar = 10;
+    return True;
+  }
+
+  on (1) {
+    globalVar = 10;
+  }
+
+  Scalar(Scalar) multByTwo = (Scalar x) -> Scalar { return x; };
+
+  wait x + y;
+
+  wait until globalVar < 5;
+
+  until (globalVar < 0) {
+    break;
+  }
 }
