@@ -23,6 +23,7 @@ library
                        KOSC.Compiler.ImportResolution
                        KOSC.Compiler.ScopeChecker
                        KOSC.Compiler.TypeChecker
+                       KOSC.Compiler.CodeGen
   build-depends:       base >= 4.7 && < 5
                      , ansi-wl-pprint
                      , trifecta

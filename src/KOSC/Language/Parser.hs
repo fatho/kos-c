@@ -68,23 +68,11 @@ opTable = [ map (entry AssocLeft) [OpMult, OpDiv]
     binOp o x y = EOp x o y
 
 exprP :: KOSCParser (Expr RawName)
-exprP = buildExpressionParser opTable argP
-
-argP :: KOSCParser (Expr RawName)
-argP = choice [stringP, scalarP, unknownP, try recordInitP, accessorChainP]
-
-stringP :: KOSCParser (Expr RawName)
-stringP = EString <$> stringLiteral
-
-scalarP :: KOSCParser (Expr RawName)
-scalarP = EScalar . either fromIntegral id <$> integerOrDouble
-
-unknownP :: KOSCParser (Expr RawName)
-unknownP = EUnknown <$ symbol "?"
+exprP = buildExpressionParser opTable accessorChainP
 
 accessorChainP ::  KOSCParser (Expr RawName)
 accessorChainP = do
-  var <- rawNameP
+  inner <- argP
   let chain inner = do
         cur <- optional $ (EAccessor inner Nothing <$> (dot *> ident varStyle))
                <|> (EIndex inner Nothing <$> brackets exprP)
@@ -92,7 +80,22 @@ accessorChainP = do
         case cur of
           Just next -> chain next
           Nothing   -> return inner
-  chain (EVar var)
+  chain inner
+
+argP :: KOSCParser (Expr RawName)
+argP = choice [stringP, scalarP, unknownP, try recordInitP, varP, parens exprP]
+
+stringP :: KOSCParser (Expr RawName)
+stringP = EString <$> stringLiteral
+
+scalarP :: KOSCParser (Expr RawName)
+scalarP = EScalar . either fromIntegral id <$> integerOrDouble
+
+varP :: KOSCParser (Expr RawName)
+varP = EVar <$> rawNameP
+
+unknownP :: KOSCParser (Expr RawName)
+unknownP = EUnknown <$ symbol "?"
 
 recordInitP :: KOSCParser (Expr RawName)
 recordInitP = ERecordInit <$> rawNameP <*> option [] (angles (commaSep typeP)) <*> braces (commaSep fieldInitP) where

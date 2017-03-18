@@ -31,6 +31,7 @@ import           KOSC.Compiler.Common
 import           KOSC.Compiler.ImportResolution
 import           KOSC.Compiler.ScopeChecker
 import           KOSC.Compiler.TypeChecker
+import           KOSC.Compiler.CodeGen
 
 import           Debug.Trace
 
@@ -38,15 +39,16 @@ data CompilerHooks m = CompilerHooks
   { resolveImport :: AST.ModuleName -> KOSCCompilerT m AST.RawModule
   }
 
--- | Compiles a program given by a main module.
-compile :: Monad m => CompilerHooks m -> AST.Module AST.RawName -> KOSCCompilerT m (Map AST.ModuleName ScopedModule)
+-- | Compiles a program given by a main module and returns the corresponding kOS Script code.
+compile :: Monad m => CompilerHooks m -> AST.Module AST.RawName -> KOSCCompilerT m GeneratedCode
 compile hooks mainModule = do
   let mainModuleName = view AST.moduleName mainModule
   imports <- resolveImports (resolveImport hooks) mainModule
   scopedMods <- iforM (imports ^. importResolutionModules) $
                 \modName mod -> scopeChecker imports (mod ^. moduleInfoAST)
   typedMods <- forM scopedMods $ \mod -> typeChecker scopedMods mod
-  return typedMods
+  cancelIfErrorneous $ MessageUnspecified $ PP.text "Cannot generate code with errors."
+  codeGen typedMods (view AST.moduleName mainModule)
 
 -- * File Based Compiler
 
@@ -81,7 +83,7 @@ fileSystemImportResolver searchPath modName = do
   return mod
 
 -- | Compiles a program from a file.
-compileFile :: FileBasedCompilerOptions -> FilePath -> IO (Either KOSCMessage _, [KOSCMessage])
+compileFile :: FileBasedCompilerOptions -> FilePath -> IO (Either KOSCMessage GeneratedCode, [KOSCMessage])
 compileFile opts filename = runCompilerT $ do
   mainmod <- parseModuleFile filename
   basePath <- liftIO $ getCurrentDirectory

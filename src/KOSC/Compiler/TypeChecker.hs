@@ -122,9 +122,9 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
   inferExpr e@(AST.ERecordInit recName tyArgs fields) = do
     let recTy = AST.TypeGeneric recName tyArgs
     fields' <- forM fields $ \(name, expr) -> do
-      fty <- findField name recTy recTy
+      fty@(TypeScheme fgen fty' _) <- findField name recTy recTy
       (expr', ety) <- inferExpr expr
-      requireType fty ety
+      requireType (TypeScheme fgen fty' AST.Get) ety
       return (name, expr')
     return (AST.ERecordInit recName tyArgs fields, TypeScheme [] recTy AST.Get)
 

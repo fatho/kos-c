@@ -25,7 +25,7 @@ public Void Main() {
   {
     Scalar z = Add23(y + 1, 2, 3);
   }
-  globalVar = globalVar + 2;
-  String s = x.TypeName;
+  globalVar = (globalVar + 1) * 4 + 2 * (3 * 5);
+  String s = (x + 1).TypeName;
   AP::Init();
 }
