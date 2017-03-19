@@ -1,81 +1,38 @@
-module Examples::Main;
+module Main;
 
 import KOS::Builtin unqualified;
-import KOS::Collections unqualified;
 import KOS::Math unqualified;
+import KOS::IO unqualified;
+import KOS::Cockpit unqualified;
+import KOS::Vessel unqualified;
+import KOS::Maneuver unqualified;
+import KOS::Time unqualified;
+import KOS::Drawing unqualified;
 
-import Examples::AutoPilot as AP;
+import Rocket::Launch as Launch;
+import Rocket::Maneuver as Maneuver;
 
-public A Id<A>(A x) {
-  return x;
-}
+Void Main() {
 
-public Scalar Add23(Scalar x, Scalar y, Scalar z = 0) {
-  return x + y + z;
-}
-
-public A Lookup<A>(List<A> list, Scalar index) {
-  return list[index];
-}
-
-public Void ForEach<A>(Enumerable<A> e, Void(A) action) {
-  for(A x : e) {
-    action(x);
-  }
-}
-
-public Void Dummy(Structure value) {
-}
-
-Scalar globalVar = 2;
-
-builtin Enumerable<Scalar> test get;
-
-builtin Scalar Throttle;
-
-public Void Main() {
-  Scalar x = 3;
-  Scalar y = Id<Scalar>(2);
-  y = x * y;
-  {
-    Scalar z = Add23(y + 1, 2, 3);
-  }
-  globalVar = (globalVar + 1) * 4 + 2 * (3 * 5);
-  String s = (x + 1).TypeName;
-  Structure foo = s;
-  String bar = cast<String>(foo);
-
-  List<Scalar> someList = List<Scalar>();
-  someList.Add(1);
-  someList.Add(2);
-  ForEach<Scalar>(someList, Dummy);
-
-  Vector v1 = V(1,2,3);
-  Vector v2 = V(0,0,1);
-  Vector v3 = v1 + v2;
-  Scalar d = v1 * v3;
-
-  AP::Init();
-
+  Launch::Launch(Launch::KerbinAscent);
+  // Don't forget the solar panels
+  Panels = True;
+  Maneuver::CircularizeAtApoapsis();
+  Maneuver::ExecuteNext();
+  // 10 sec stay
+  wait(10);
+  // reentry burn
+  lock Steering = Ship.Retrograde;
+  wait(10);
   lock Throttle = 1;
-  unlock all;
-
-  when (Throttle < 1) {
-    globalVar = 10;
-    return True;
-  }
-
-  on (1) {
-    globalVar = 10;
-  }
-
-  Scalar(Scalar) multByTwo = (Scalar x) -> Scalar { return x; };
-
-  wait x + y;
-
-  wait until globalVar < 5;
-
-  until (globalVar < 0) {
-    break;
-  }
+  wait until (Ship.Orbit.Periapsis < 35000);
+  unlock Throttle;
+  unlock Steering;
+  // wait for atmosphere
+  wait until (Ship.Altitude < 70000);
+  Panels = False;
+  lock Steering = Ship.SrfRetrograde;
+  // wait until lower altitude for chute deployment
+  wait until (Ship.Altitude < 3000);
+  Chutes = True;
 }
