@@ -52,8 +52,8 @@ builtin structure Orbitable : Structure {
 }
 
 builtin structure OrbitableVelocity : Structure {
-  Scalar Orbit get;
-  Scalar Surface get;
+  Vector Orbit get;
+  Vector Surface get;
 }
 
 builtin structure ETA : Structure {
@@ -71,3 +71,7 @@ builtin structure ALT : Structure {
 }
 
 builtin ALT ALT get;
+
+builtin Vector PositionAt(Orbitable sat, Scalar time);
+builtin OrbitableVelocity VelocityAt(Orbitable sat, Scalar time);
+builtin Orbit OrbitAt(Orbitable sat, Scalar time);

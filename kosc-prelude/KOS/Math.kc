@@ -36,6 +36,18 @@ builtin Direction LookDirUp(Vector lookAt, Vector lookUp);
 builtin Direction AngleAxis(Scalar degrees, Vector axis);
 builtin Direction RotateFromTo(Vector from, Vector to);
 
+builtin structure Constant {
+  Scalar G get;
+  Scalar E get;
+  Scalar Pi get;
+  Scalar c get;
+  Scalar AtmToKPa get;
+  Scalar KPaToAtm get;
+  Scalar DegToRad get;
+  Scalar RadToDeg get;
+}
+builtin Constant Constant get;
+
 builtin structure PIDLoop {
   Scalar LastSampleTime get;
   Scalar KP;
@@ -56,3 +68,24 @@ builtin structure PIDLoop {
 }
 
 builtin PIDLoop PIDLoop(Scalar kp = ?, Scalar ki = ?, Scalar kd = ?, Scalar minOut = ?, Scalar maxOut = ?);
+
+builtin Scalar Min(Scalar a, Scalar b);
+builtin Scalar Max(Scalar a, Scalar b);
+builtin Scalar Abs(Scalar a);
+builtin Scalar Ceiling(Scalar a);
+builtin Scalar Floor(Scalar a);
+builtin Scalar Ln(Scalar a);
+builtin Scalar Log10(Scalar a);
+builtin Scalar Mod(Scalar a, Scalar b);
+builtin Scalar Round(Scalar a, Scalar b = ?);
+builtin Scalar Sqrt(Scalar a);
+builtin String Char(Scalar a);
+builtin Scalar UnChar(String a);
+
+builtin Scalar Sin(Scalar a);
+builtin Scalar Cos(Scalar a);
+builtin Scalar Tan(Scalar a);
+builtin Scalar ArcSin(Scalar a);
+builtin Scalar ArcCos(Scalar a);
+builtin Scalar ArcTan(Scalar a);
+builtin Scalar ArcTan2(Scalar a, Scalar b);

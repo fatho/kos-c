@@ -56,6 +56,16 @@ builtin structure Vessel : Orbitable {
   MessageQueue Messages get;
 }
 
+List<Engine> ListEngines(Vessel vessel) {
+  List<Engine> ret = List<Engine>();
+  for(Part p : vessel.Parts) {
+    if(p.IsType("Engine")) {
+      ret.Add(cast<Engine>(p));
+    }
+  }
+  return ret;
+}
+
 builtin structure Control : Structure {
   Scalar MainThrottle;
   Scalar Yaw;
