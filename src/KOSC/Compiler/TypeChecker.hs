@@ -45,8 +45,9 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
   checkDecl other               = return other
 
   checkFunDecl (AST.FunDecl sig body) = enterScope $ enterDecl (sig ^. AST.funSigName) $ do
-    buildFunctionEnv sig
-    AST.FunDecl sig <$> mapM checkStmt body
+    sig' <- checkFunSig sig
+    buildFunctionEnv sig'
+    AST.FunDecl sig' <$> mapM checkStmt body
 
   checkVarDecl (AST.VarDecl sig inite) = enterDecl (sig ^. AST.varSigName) $ do
     let TypeScheme declGen declTy _ = varSigToTypeScheme sig
@@ -211,6 +212,15 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
     (cond', condTy) <- inferExpr cond
     requireType (TypeScheme [] boolType AST.Get) condTy
     AST.SWhen cond' <$> enterScope (requiredReturnType .= Just (TypeScheme [] boolType AST.Get) >> traverse checkStmt body)
+
+  checkFunSig (AST.FunSig vis ret name gens params outName) = do
+    params' <- forM params $ \p@(AST.Param ty name expr) -> case expr of
+      Nothing -> return p
+      Just e -> do
+        (e', ety) <- inferExpr e
+        requireType (TypeScheme [] ty AST.Get) ety
+        return (AST.Param ty name (Just e'))
+    return (AST.FunSig vis ret name gens params' outName)
 
   -- searches a field of a type
   findField fieldName startedTy ty =
