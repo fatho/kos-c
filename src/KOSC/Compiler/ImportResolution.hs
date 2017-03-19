@@ -80,7 +80,10 @@ getExportedTypeNames mod = [ name | decl <- view AST.declarations mod, name <- g
   getname (AST.DeclBuiltin (AST.BuiltinVar _)) = [ ]
 
 -- | Transitively resolves all imports, starting at the given main module.
-resolveImports :: Monad m => (AST.ModuleName -> KOSCCompilerT m AST.RawModule) -> AST.RawModule -> KOSCCompilerT m ImportResolution
+resolveImports :: Monad m
+               => (AST.ModuleName -> KOSCCompilerT m AST.RawModule) -- ^ function loading a module
+               -> AST.RawModule                                     -- ^ main module where the search for imports is started
+               -> KOSCCompilerT m ImportResolution
 resolveImports loadModule mainModule = execStateT (go [mainModuleName]) initialState where
   mainModuleName = view AST.moduleName mainModule
 
@@ -106,4 +109,4 @@ resolveImports loadModule mainModule = execStateT (go [mainModuleName]) initialS
         importResolutionModules . at name .= Just (ImportedModuleInfo mod expTypeSet expTermSet imports)
         return imports
       go $ map (view AST.importModuleName) imports ++ rest
-    Just _ -> go rest
+    Just _ -> go rest -- already imported elsewhere

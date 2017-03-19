@@ -26,14 +26,17 @@ cmdParser = CmdLine
 
 main :: IO ()
 main = do
+  -- check command line options
   let opts = info (cmdParser <**> helper)
              ( fullDesc
                <> progDesc "Compiles a kOS-C program into a kOS script."
                <> header "koscc - The kOS-C Compiler" )
   options <- execParser opts
+  -- compile file if options are there
   (result, messages) <- compileFile (FileBasedCompilerOptions $ searchPath options) (mainModule options)
   forM_ messages $ \msg -> PP.displayIO stderr (PP.renderPretty 0.8 200 $ PP.pretty msg) >> putStrLn ""
   case result of
+    -- either output to file or on stdout
     Right prog -> case outputFile options of
       Nothing -> L.putStrLn prog
       Just f -> L.writeFile f prog

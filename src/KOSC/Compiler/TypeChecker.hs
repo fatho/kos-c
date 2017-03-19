@@ -20,12 +20,17 @@ import qualified KOSC.Language.AST            as AST
 
 import           Debug.Trace
 
+-- | A type scheme quantifies over some generic variables and carries accessibility information.
 data TypeScheme = TypeScheme [AST.Ident] (AST.Type AST.ScopedName) AST.Accessibility
 
+-- | Internal environment of the type checker.
 data TypeEnv = TypeEnv
   { _typeMap            :: Map AST.ScopedName TypeScheme
+  -- ^ Maps identifiers to their types
   , _requiredReturnType :: Maybe TypeScheme
+  -- ^ The required return type when checking a function
   , _globalTypeMap      :: Map AST.ScopedName ScopedTypeExport
+  -- ^ Maps type identifiers to their declarations
   }
 
 makeLenses ''TypeEnv
@@ -33,7 +38,12 @@ makeLenses ''TypeEnv
 -- | Type checks a module and adds some extra information in the AST.
 typeChecker :: Monad m => Map AST.ModuleName ScopedModule -> ScopedModule -> KOSCCompilerT m ScopedModule
 typeChecker imports inputMod = evalStateT checkModule initialEnv where
+  -- combine all exports of all modules
   initialEnv = TypeEnv Map.empty Nothing (foldOf (folded . scopedModuleTypes) imports)
+
+  -- the following functions recursively traverse the AST and implement the typing rules
+  -- since there is no formal description of the type system yet, there are some ad-hoc
+  -- decisions that have been made that probably could be solved in better ways.
 
   checkModule = do
     populateGlobalTypeEnv imports
@@ -59,6 +69,7 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
   inferExpr e@(AST.EVar v) = use (typeMap . at v) >>= \case
     Nothing -> criticalWithContext $ MessageUnspecified $ PP.text "Undeclared variable found in type checker. This is a bug. Did the program pass the scope checker?"
     Just scheme
+      -- wrap variables of function type in an @ sign to prevent kOS from automatically calling functions
       | isFunctionScheme scheme -> return (AST.EAt e, scheme)
       | otherwise -> return (e, scheme)
   inferExpr (AST.EAccessor e _ field) = do
@@ -66,6 +77,7 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
     ty <- requireNonGeneric tysc
     requireAccess AST.Get access
     fty <- findField field ty ty
+    -- if an accessor has a function type, again add the @ sign
     if isFunctionScheme fty
       then return $ (AST.EAt (AST.EAccessor e' (Just ty) field), fty)
       else return $ (AST.EAccessor e' (Just ty) field, fty)
@@ -118,6 +130,7 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
         -- match arguments individually
         (args', argTys) <- unzip <$> traverse inferExpr args
         zipWithM_ requireType (map (\t -> TypeScheme [] (substituteGenerics gensubst t) AST.Get) $ manTys ++ optTys) argTys
+        -- when calling something that was previously wrapped in an @ sign, remove it again
         let fNoAt = case f' of
               AST.EAt e -> e
               _ -> f'
@@ -269,6 +282,7 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
   enumerableType a = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Collections", "Enumerable"]) [a]
   unknownType = AST.TypeGeneric (AST.ScopedLocal "__UNKNOWN__") []
 
+  -- table containing possible overloads of binary operators
   operatorOverloads binOp = case binOp of
     AST.BinOpPlus -> [(scalarType, scalarType, scalarType)
                      ,(vectorType, vectorType, vectorType)
@@ -296,6 +310,7 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
     AST.BinOpGreater -> [(structType, structType, boolType)]
     AST.BinOpLess -> [(structType, structType, boolType)]
 
+  -- searches a matching overload of an operator
   findOp binOp ty1 ty2 = fmap (view _2) . find (view _1) <$> mapM check (operatorOverloads binOp) where
     check (arg1, arg2, ret) = (\a b -> (a && b, ret)) <$> isSubtypeOf Covariant ty1 arg1 <*> isSubtypeOf Covariant ty2 arg2
 
@@ -312,16 +327,19 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
     put env
     return r
 
+-- | Is the type scheme representing a function?
 isFunctionScheme :: TypeScheme -> Bool
 isFunctionScheme (TypeScheme _ (AST.TypeFunction _ _ _) _) = True
 isFunctionScheme _ = False
 
+-- | Checks whether the type scheme is generic, and emits an error message in that case
 requireNonGeneric :: MonadCompiler MessageContent m => TypeScheme -> m (AST.Type AST.ScopedName)
 requireNonGeneric (TypeScheme [] ty _) = pure ty
 requireNonGeneric (TypeScheme _ ty _) = do
   messageWithContext MessageError $ MessageGenericTypeMismatch
   return ty
 
+-- | Substitutes generic variables in a type.
 substituteGenerics :: Map AST.Ident (AST.Type AST.ScopedName) -> AST.Type AST.ScopedName -> AST.Type AST.ScopedName
 substituteGenerics subst = go where
   -- cannot apply generics to a generic variable anyway
@@ -329,46 +347,41 @@ substituteGenerics subst = go where
   go (AST.TypeGeneric name args) = AST.TypeGeneric name (map go args)
   go (AST.TypeFunction ret args opts) = AST.TypeFunction (go ret) (map go args) (map go opts)
 
+-- | Enforces that something is accessible in the required way.
 requireAccess :: MonadCompiler MessageContent m => AST.Accessibility -> AST.Accessibility -> m ()
 requireAccess required actual = when (not $ hasAccess required actual) $
   messageWithContext MessageError $ MessageWrongAccessibility required
 
+-- | @hasAccess a b@ checks whether @b@ can be accessed as required by @a@.
 hasAccess :: AST.Accessibility -> AST.Accessibility -> Bool
 hasAccess required actual = case required of
   AST.Get      -> actual /= AST.Set
   AST.Set      -> actual /= AST.Get
   AST.GetOrSet -> actual == AST.GetOrSet
 
-data Variance = Covariant | Contravariant | Invariant
+-- | Variance when checking subtyping
+data Variance
+  = Covariant      -- ^ checking covariantly (A is a subtype of B if A derives from B)
+  | Contravariant  -- ^ checking contravariantly (A is a subtype of B if B derives from A)
+  | Invariant      -- ^ checking invariantly (A is a subtype of B if A is equal to B)
 
+-- | Flips the variance (needed when checking functions, as they are contravariant in their arguments).
 flipVariance :: Variance -> Variance
 flipVariance Covariant     = Contravariant
 flipVariance Contravariant = Covariant
 flipVariance Invariant     = Invariant
 
+-- | @requireType required actual@ requires that @actual@ is a subtype of @required@.
 requireType :: MonadCompiler MessageContent m => TypeScheme -> TypeScheme -> StateT TypeEnv m ()
 requireType (TypeScheme gen1 ty1 acc1) (TypeScheme gen2 ty2 acc2)
   | length gen1 /= length gen2 = messageWithContext MessageError $ MessageGenericTypeMismatch
-  | otherwise = do
-      requireAccess acc1 acc2
-      compareTypes Covariant (substituteGenerics (Map.fromList $ zip gen1 (map (\g -> AST.TypeGeneric (AST.ScopedLocal g) []) gen2)) ty1) ty2
-  where
-    compareTypes var t1@(AST.TypeGeneric n1 args1) t2@(AST.TypeGeneric n2 args2) = do
-      allowedCast <- checkCast var n1 args1 n2 args2
-      when (not allowedCast || length args1 /= length args2) $
-        messageWithContext MessageError $ MessageTypesNotEqual t1 t2
-    compareTypes var t1@(AST.TypeFunction ret1 args1 opts1) t2@(AST.TypeFunction ret2 args2 opts2) = do
-      compareTypes var ret1 ret2
-      when (length args1 /= length args2 || length opts1 /= length opts2) $
-        messageWithContext MessageError $ MessageTypesNotEqual t1 t2
-      zipWithM_ (compareTypes $ flipVariance var) args1 args2
-      zipWithM_ (compareTypes $ flipVariance var) opts1 opts2
-    compareTypes _ t1 t2 = messageWithContext MessageError $ MessageTypesNotEqual t1 t2
+  | otherwise =  do
+      isSub <- isSubtypeOf Covariant (substituteGenerics (Map.fromList $ zip gen1 (map (\g -> AST.TypeGeneric (AST.ScopedLocal g) []) gen2)) ty1) ty2
+      when (not $ isSub && hasAccess acc1 acc2) $
+        messageWithContext MessageError $ MessageTypesNotEqual ty1 ty2
 
-    checkCast Invariant n1 args1 n2 args2 = return $ n1 == n2 && args1 == args2
-    checkCast Covariant n1 args1 n2 args2 = (n2, args2) `isSubStructOf` (n1, args1)
-    checkCast Contravariant n1 args1 n2 args2 = (n1, args1) `isSubStructOf` (n2, args2)
-
+-- | @isSubSchemeOf sub super@ checks if @sub@ and @super@ have the same number
+-- of generic arguments and that @sub@ can be instantiated to be a subtype of @super@.
 isSubSchemeOf :: MonadCompiler MessageContent m => TypeScheme -> TypeScheme -> StateT TypeEnv m Bool
 isSubSchemeOf (TypeScheme gen1 ty1 acc1) (TypeScheme gen2 ty2 acc2)
   | length gen1 /= length gen2 = return False
@@ -376,6 +389,11 @@ isSubSchemeOf (TypeScheme gen1 ty1 acc1) (TypeScheme gen2 ty2 acc2)
       isSub <- isSubtypeOf Covariant (substituteGenerics (Map.fromList $ zip gen1 (map (\g -> AST.TypeGeneric (AST.ScopedLocal g) []) gen2)) ty1) ty2
       return $ isSub && hasAccess acc1 acc2
 
+-- | @isSubtypeOf var sub super@ checks whether @sub@ is a subtype of @super@ using the current variance information.
+-- For example, when checking covariantly, @Scalar@ is a subtype of @Structure@, and a function @Scalar(Structure)@
+-- is a subtype of @Structure(Scalar)@. Note that the variance has been flipped when checking the arguments of the functions.
+-- This is because any function that can take a @Structure@ can also take a @Scalar@.
+-- Generic type arguments are checked invariantly currently, because they could occur in both covariant and contravariant positions.
 isSubtypeOf :: MonadCompiler MessageContent m => Variance -> AST.Type AST.ScopedName -> AST.Type AST.ScopedName -> StateT TypeEnv m Bool
 isSubtypeOf = compareTypes where
     compareTypes var (AST.TypeGeneric n1 args1) (AST.TypeGeneric n2 args2) = do
@@ -395,6 +413,7 @@ isSubtypeOf = compareTypes where
     checkCast Covariant n1 args1 n2 args2 = (n1, args1) `isSubStructOf` (n2, args2)
     checkCast Contravariant n1 args1 n2 args2 = (n2, args2) `isSubStructOf` (n1, args1)
 
+-- | Checks whether the first structure derives from the second.
 isSubStructOf :: MonadCompiler MessageContent m => (AST.ScopedName, [AST.Type AST.ScopedName]) -> (AST.ScopedName, [AST.Type AST.ScopedName]) -> StateT TypeEnv m Bool
 isSubStructOf (n1, tyargs1) (n2, tyargs2)
   | n1 == n2 && tyargs1 == tyargs2 = return True
@@ -411,13 +430,14 @@ isSubStructOf (n1, tyargs1) (n2, tyargs2)
                 _ -> return False
         Nothing -> criticalWithContext $ MessageUnspecified $ PP.text "Unknown type encountered during type checking:" PP.<+> PP.pretty n1 PP.<+> PP.text "This is a bug."
 
-
+-- | Builds the environment required for checking a function body by bringing all the parameters in scope.
 buildFunctionEnv :: Monad m => AST.FunSig AST.ScopedName -> StateT TypeEnv m ()
 buildFunctionEnv sig = do
   requiredReturnType .= Just (TypeScheme [] (sig ^. AST.funSigReturnType) AST.Get)
   forMOf_ (AST.funSigParameters . folded) sig $ \(AST.Param ty name _) ->
     typeMap . at (AST.ScopedLocal name) .= Just (TypeScheme [] ty AST.GetOrSet)
 
+-- | Generate a type scheme from a function.
 funSigToTypeScheme :: AST.FunSig AST.ScopedName -> TypeScheme
 funSigToTypeScheme fsig =
   let ret = fsig ^. AST.funSigReturnType
@@ -425,12 +445,15 @@ funSigToTypeScheme fsig =
       opts = toListOf (AST.funSigParameters . folded . filtered AST.isOptional . AST.paramType) fsig
   in TypeScheme (fsig ^. AST.funSigGenerics) (AST.TypeFunction ret args opts) AST.Get
 
+-- | Generate a type scheme from a variable.
 varSigToTypeScheme :: AST.VarSig AST.ScopedName -> TypeScheme
 varSigToTypeScheme vsig = TypeScheme [] (vsig ^. AST.varSigType) (vsig ^. AST.varSigAccess)
 
+-- | From an indexing operation in a structure.
 indexSigToTypeScheme :: AST.IndexSig AST.ScopedName -> TypeScheme
 indexSigToTypeScheme isig = TypeScheme [] (AST.TypeFunction (isig ^. AST.indexSigReturnType) [isig ^. AST.indexSigIndexType] []) (isig ^. AST.indexSigAccess)
 
+-- | Adds all global definitions to the scope.
 populateGlobalTypeEnv :: Monad m => Map AST.ModuleName ScopedModule -> StateT TypeEnv m ()
 populateGlobalTypeEnv = imapMOf_ (folded . scopedModuleVars . ifolded) $ \name sig ->
   case sig of

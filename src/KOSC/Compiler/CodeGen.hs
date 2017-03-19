@@ -10,43 +10,62 @@ import           Control.Lens
 import           Control.Monad.State
 import           Data.Foldable
 import           Data.List
-import           Data.Map.Strict                (Map)
-import qualified Data.Map.Strict                as Map
+import           Data.Map.Strict               (Map)
+import qualified Data.Map.Strict               as Map
 import           Data.Maybe
-import qualified Data.Text.Lazy                 as L
-import           Numeric                        (showIntAtBase, showGFloat)
-import           Text.InterpolatedString.Perl6  (qq)
-import qualified Text.PrettyPrint.ANSI.Leijen   as PP
+import qualified Data.Text.Lazy                as L
+import           Numeric                       (showGFloat, showIntAtBase)
+import           Text.InterpolatedString.Perl6 (qq)
+import qualified Text.PrettyPrint.ANSI.Leijen  as PP
 
 import           KOSC.Compiler.Common
 import           KOSC.Compiler.ScopeChecker
-import qualified KOSC.Language.AST              as AST
+import qualified KOSC.Language.AST             as AST
 
+-- | The type of generated names. Mainly used for identifying what a function actually returns instead of just text.
 type GeneratedName = L.Text
 
+-- | Type of generated code.
 type GeneratedCode = L.Text
 
 -- | Possible declarations for things that are types
-data TypeDecl = Record (AST.RecDecl AST.ScopedName) | BuiltinStruct (AST.StructSig AST.ScopedName)
+data TypeDecl
+  = Record (AST.RecDecl AST.ScopedName) -- ^ the type is a record
+  | BuiltinStruct (AST.StructSig AST.ScopedName) -- ^ the type is a builtin structure
 
 -- | Possible declarations for things that are variables.
-data TermDecl = Fun (AST.FunDecl AST.ScopedName) | Var (AST.VarDecl AST.ScopedName)
-  | BuiltinFun (AST.FunSig AST.ScopedName) | BuiltinVar (AST.VarSig AST.ScopedName)
+data TermDecl
+  = Fun (AST.FunDecl AST.ScopedName) -- ^ refers to a function
+  | Var (AST.VarDecl AST.ScopedName) -- ^ refers to variable
+  | BuiltinFun (AST.FunSig AST.ScopedName) -- ^ refers to a builtin function
+  | BuiltinVar (AST.VarSig AST.ScopedName) -- ^ refers to a builtin variable
 
+-- | Internal state of the code generator.
 data CodeGenState = CodeGenState
   { _generatedNames   :: Map AST.ScopedName GeneratedName
+  -- ^ Mapping from scoped names (source) to generated names (target). This is used for the renaming feature.
   , _typeDeclarations :: Map AST.ScopedName TypeDecl
+  -- ^ Type declarations of all imported modules. When dealing with records, we need to inspect the type of the things that are accessed.
   , _termDeclarations :: Map AST.ScopedName TermDecl
+  -- ^ Term level declarations (i.e. global functions and variables) of all imported modules.
   , _generatedCode    :: Map AST.ScopedName L.Text
+  -- ^ Mapping from top-level entities (functions or vars so far) to the code that has been generated for them (if any).
   , _fresh            :: Integer
+  -- ^ Used for generating fresh names.
   }
 
 makeLenses ''CodeGenState
 
+-- | The code generation monad. It carries the state on top of the underlying compiler monad.
 type CodeGenM m = StateT CodeGenState (KOSCCompilerT m)
 
-codeGen :: Monad m => Map AST.ModuleName ScopedModule -> AST.ModuleName -> KOSCCompilerT m L.Text
+-- | Entry point of the code generator.
+codeGen :: Monad m
+        => Map AST.ModuleName ScopedModule -- ^ all transitive includes of the main module (should also contain the main module itself)
+        -> AST.ModuleName                  -- ^ the main module (containing a function "Main")
+        -> KOSCCompilerT m L.Text
 codeGen imports mainModule = evalStateT go initialState where
+  -- helper functions for generating maps from fully qualified names to things defined in a module
   exportDecls which mod = let modname = mod ^. AST.moduleName
                           in Map.fromList [ (AST.makeGlobalName modname name, d) | decl <- view AST.declarations mod, (name, d) <- which decl ]
 
@@ -62,6 +81,7 @@ codeGen imports mainModule = evalStateT go initialState where
 
   initialState = CodeGenState
     { _generatedNames = Map.empty
+    -- throw together all declarations from all imported modules
     , _typeDeclarations = foldOf (folded . scopedModuleAST . to (exportDecls exportTypeDecl) ) imports
     , _termDeclarations = foldOf (folded . scopedModuleAST . to (exportDecls exportTermDecl) ) imports
     , _generatedCode = Map.empty
@@ -69,22 +89,23 @@ codeGen imports mainModule = evalStateT go initialState where
     }
 
   go = do
+    -- start code generation on main module
     mainName <- generateIfRequired (AST.makeGlobalName mainModule "Main")
     declCode <- uses generatedCode fold
+    -- emit a call to the generated main function at the end of the script
     return $ L.append declCode [qq|$mainName().|]
 
+-- | Generates a fresh name. Currently, it uses base 36 numbers prefixed with an underscore
+-- in order to make names as short as possible.
 freshName :: Monad m => CodeGenM m GeneratedName
 freshName = nameBase36 <$> (fresh <<+= 1)
 
--- | Emits a piece of raw code.
-emitDeclCode :: Monad m => AST.ScopedName -> L.Text -> CodeGenM m ()
-emitDeclCode name code = generatedCode . at name .= Just code
-
 -- | Generates the entity referred to by the scoped name, if it has not yet been generated.
 -- Returns the generated name of the requested entity.
+-- This is the core of the lazy code generation. If a name is never requested, it will never generate code for its definition.
 generateIfRequired :: Monad m => AST.ScopedName -> CodeGenM m GeneratedName
 generateIfRequired sname = use (generatedNames . at sname) >>= \case
-  Just genName -> return genName
+  Just genName -> return genName -- we already generated that
   Nothing -> use (termDeclarations . at sname) >>= \case
     Nothing -> criticalWithContext $ MessageUnspecified $ PP.text "Undeclared identifier found in code generator. This is a bug."
     Just td -> case td of
@@ -97,11 +118,13 @@ generateIfRequired sname = use (generatedNames . at sname) >>= \case
         generatedCode . at sname .= Just fcode
         return name
       Var vdef -> do
-        name <- maybe freshName (pure . L.pack) (vdef ^. AST.varDeclSignature . AST.varSigOutputName)
+        -- variables are handled similar to functions
+        name <- freshName
         generatedNames . at sname .= Just name
         vcode <- enterDecl (vdef ^. AST.varDeclSignature . AST.varSigName) $ generateVar name vdef
         generatedCode . at sname .= Just vcode
         return name
+        -- builtins do not generate code, and we never rename them
       BuiltinFun sig -> do
         let genname = L.pack $ fromMaybe (sig ^. AST.funSigName) (sig ^. AST.funSigOutputName)-- preserve names for builtins
         generatedNames . at sname .= Just genname
@@ -111,46 +134,59 @@ generateIfRequired sname = use (generatedNames . at sname) >>= \case
         generatedNames . at sname .= Just genname
         return genname
 
+-- | Generates code for a name. Local variables are returned as-is, global variables might trigger further code generation.
 generateName :: Monad m => AST.ScopedName -> CodeGenM m GeneratedName
 generateName (AST.ScopedLocal l) = return $ L.pack l
 generateName g@(AST.ScopedGlobal _) = generateIfRequired g
 generateName (AST.ScopedAmbiguous _) = criticalWithContext $ MessageUnspecified "Encountered ambiguous name in code generator. This is a bug."
 
-generateExpression :: Monad m => AST.Expr AST.ScopedName -> CodeGenM m L.Text
+-- | Generates code for an expression.
+generateExpression :: Monad m => AST.Expr AST.ScopedName -> CodeGenM m GeneratedCode
 generateExpression e = go 0 e where
+  -- helper function to emit parenthesis when required by operator precedence
+  -- All generation function take an argument "outerPrec" that denotes how strong the enclosing operator binds.
+  -- If the enclosing operator binds stronger than the current operation being generated, parentheses are added.
   precParens requiredPrec actualPrec str
     | actualPrec < requiredPrec = [qq|($str)|]
     | otherwise = str
 
-  genOp :: AST.BinOp -> (L.Text, Int, Int, Int)
-  genOp op = case op of
-        AST.BinOpPlus -> ("+", 6, 6, 7)
-        AST.BinOpMinus -> ("-", 6, 6, 7)
-        AST.BinOpMult -> ("*", 7, 7, 8)
-        AST.BinOpDiv -> ("/", 7, 7, 8)
-        AST.BinOpPow -> ("^", 9, 9, 10)
-        AST.BinOpAnd -> ("and", 3, 4, 3)
-        AST.BinOpOr -> ("or", 2, 3, 2)
-        AST.BinOpEq -> ("=", 4, 5, 5)
-        AST.BinOpNeq -> ("<>", 4, 5, 5)
-        AST.BinOpLeq -> ("<=", 4, 5, 5)
-        AST.BinOpGeq -> (">=", 4, 5, 5)
-        AST.BinOpLess -> ("<", 4, 5, 5)
+  -- info table for binary operators, it returns a quadruple consisting
+  -- of the operator symbol, its precedence, and the required precedence of the left and right arguments.
+  -- The latter two are used to implement associativity rules.
+  binOpInfo :: AST.BinOp -> (L.Text, Int, Int, Int)
+  binOpInfo op = case op of
+        AST.BinOpPlus    -> ("+", 6, 6, 7)
+        AST.BinOpMinus   -> ("-", 6, 6, 7)
+        AST.BinOpMult    -> ("*", 7, 7, 8)
+        AST.BinOpDiv     -> ("/", 7, 7, 8)
+        AST.BinOpPow     -> ("^", 9, 9, 10)
+        AST.BinOpAnd     -> ("and", 3, 4, 3)
+        AST.BinOpOr      -> ("or", 2, 3, 2)
+        AST.BinOpEq      -> ("=", 4, 5, 5)
+        AST.BinOpNeq     -> ("<>", 4, 5, 5)
+        AST.BinOpLeq     -> ("<=", 4, 5, 5)
+        AST.BinOpGeq     -> (">=", 4, 5, 5)
+        AST.BinOpLess    -> ("<", 4, 5, 5)
         AST.BinOpGreater -> (">", 4, 5, 5)
 
-  genUnOp :: AST.UnOp -> (L.Text, Int)
-  genUnOp op = case op of
+  -- info table for unary operators, consisting of the symbol and precedence
+  unOpInfo :: AST.UnOp -> (L.Text, Int)
+  unOpInfo op = case op of
     AST.UnOpNegate -> ("-", 8)
-    AST.UnOpNot -> ("not", 8)
+    AST.UnOpNot    -> ("not", 8)
 
-  -- FIXME: allow renaming of structure fields as well
+  --------- GENERATION FUNCTIONS
 
+  -- generates an accessor for a structure
   goStructAccessor outerPrec accessed field = do
     acode <- go 10 accessed
     return $ precParens outerPrec 10 [qq|$acode:$field|]
 
+  -- generates an accessor for a record field.
+  -- It looks up the index of the field in the record declaration and generates the corresponding list indexing expression.
   goRecordAccessor outerPrec accessed record field = case elemIndex field $ toListOf (AST.recDeclVars . folded . AST.varSigName) record of
     Nothing
+      -- hard code generation of "Copy" field
       | field == "Copy" -> do
         acode <- go 10 accessed
         return $ precParens outerPrec 10 [qq|$acode:$field|]
@@ -159,6 +195,7 @@ generateExpression e = go 0 e where
       acode <- go 10 accessed
       return $ precParens outerPrec 10 [qq|$acode[$idx]|]
 
+  -- actual recursion for generating expressions. Most cases are wrapped in a use of "precParens" to insert parentheses when needed
   go outerPrec e = case e of
     AST.EVar name -> generateName name
     AST.EAccessor accessed whatTy field -> case whatTy of
@@ -173,12 +210,12 @@ generateExpression e = go 0 e where
       acode <- go 0 arg
       return $ precParens outerPrec 10 [qq|$icode[$acode]|]
     AST.EOp e1 o e2 -> do
-      let (sym, selfPrec, lprec, rprec) = genOp o
+      let (sym, selfPrec, lprec, rprec) = binOpInfo o
       lcode <- go lprec e1
       rcode <- go rprec e2
       return $ precParens outerPrec selfPrec [qq|$lcode $sym $rcode|]
     AST.EUnOp op e -> do
-      let (sym, selfPrec) = genUnOp op
+      let (sym, selfPrec) = unOpInfo op
       code <- go selfPrec e
       return $ precParens outerPrec selfPrec [qq|$sym $code|]
     AST.ECall callee _ args -> do
@@ -207,10 +244,12 @@ generateExpression e = go 0 e where
       ecode <- go outerPrec e
       return [qq|$ecode@|]
 
-generateStatements :: Monad m => [AST.Stmt AST.ScopedName] -> CodeGenM m L.Text
+-- | Generates a list of statements.
+generateStatements :: Monad m => [AST.Stmt AST.ScopedName] -> CodeGenM m GeneratedCode
 generateStatements stmts = L.concat <$> traverse generateStatement stmts
 
-generateStatement :: Monad m => AST.Stmt AST.ScopedName -> CodeGenM m L.Text
+-- | Generates code for a single statement.
+generateStatement :: Monad m => AST.Stmt AST.ScopedName -> CodeGenM m GeneratedCode
 generateStatement s = case s of
   AST.SDeclVar _ name init -> do
     icode <- generateExpression init
@@ -266,12 +305,14 @@ generateStatement s = case s of
     bcode <- generateStatements body
     return [qq|when $ccode then \{$ln$bcode\}$ln|]
 
+-- | Generates code for a function declaration.
 generateFunction :: Monad m => GeneratedName -> AST.FunDecl AST.ScopedName -> CodeGenM m L.Text
 generateFunction actualName decl = do
   body <- generateFunctionBody (decl ^. AST.funDeclSignature . AST.funSigParameters) (decl ^. AST.funDeclStatements)
   let code = [qq|FUNCTION $actualName $body$ln|]
   return code
 
+-- | Generates for a function body. This is used for both lambda functions and actual declarations.
 generateFunctionBody :: Monad m => [AST.Param AST.ScopedName] -> [AST.Stmt AST.ScopedName] -> CodeGenM m L.Text
 generateFunctionBody params stmts = do
   let param (AST.Param _ name Nothing) = return $ L.pack name
@@ -284,16 +325,19 @@ generateFunctionBody params stmts = do
       code = [qq|\{$ln$paramDecl$body\}$ln|]
   return code
 
+-- | Generates a global variable.
 generateVar :: Monad m => GeneratedName -> AST.VarDecl AST.ScopedName -> CodeGenM m L.Text
 generateVar actualName decl = do
   icode <- generateExpression (decl ^. AST.varDeclInitializer)
   return [qq|DECLARE GLOBAL $actualName TO $icode.$ln|]
 
+-- | Converts a number to a valid name by displaying it in base 36 and prefixing it with an underscore.
 nameBase36 :: Integer -> GeneratedName
 nameBase36 = L.pack . ('_' :) . showBase36 where
   chars = ['0'..'9'] ++ ['a'..'z']
   toChar i = chars !! i
   showBase36 i = showIntAtBase 36 toChar i ""
 
+-- | Newline character that is used in the string interpolations.
 ln :: L.Text
 ln = "\n"

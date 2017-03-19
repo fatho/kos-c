@@ -42,8 +42,11 @@ data ScopedTermExport = ScopedFun (AST.FunSig AST.ScopedName) | ScopedVar (AST.V
 -- | A scoped module with extra information populated by the scope checker.
 data ScopedModule = ScopedModule
   { _scopedModuleAST   :: AST.Module AST.ScopedName
+  -- ^ AST with fully qualified variables
   , _scopedModuleTypes :: Map AST.ScopedName ScopedTypeExport
+  -- ^ exported types of this module
   , _scopedModuleVars  :: Map AST.ScopedName ScopedTermExport
+  -- ^ exported functions and variables of this module
   } deriving (Read, Show)
 
 makeLenses ''ScopedModule
@@ -247,6 +250,8 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
   insertGenerics = traverse_ $ \v -> typeScope . at (AST.RawName [v]) .= Just (AST.ScopedLocal v)
   insertLocalVars = traverse_ $ \v -> termScope . at (AST.RawName [v]) .= Just (AST.ScopedLocal v)
 
+-- | Creates a structure signature for a record. It derives from the builtin structure KOS::Builtin::Record,
+-- which provides the @Copy()@ function.
 makeRecordSig :: AST.ModuleName -> AST.RecDecl AST.ScopedName -> AST.StructSig AST.ScopedName
 makeRecordSig modName (AST.RecDecl vis name gens vars) = AST.StructSig vis name gens super (map AST.FieldVarSig vars) where
   super = Just $ AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Builtin", "Record"]) [AST.TypeGeneric recFullName []]

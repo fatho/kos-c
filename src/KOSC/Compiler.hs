@@ -44,9 +44,11 @@ compile hooks mainModule = do
 
 data FileBasedCompilerOptions = FileBasedCompilerOptions
   { _librarySearchPath :: [FilePath]
+  -- ^ the directories where to look for modules
   }
 makeLenses ''FileBasedCompilerOptions
 
+-- | Parses a module file and uses the compiler monad for handling errors.
 parseModuleFile :: FilePath -> KOSCCompilerT IO (AST.Module AST.RawName)
 parseModuleFile filename = do
   modparse <- Trifecta.parseFromFileEx (Parser.runKOSCParser $ Parser.moduleP <* Trifecta.eof) filename
@@ -55,6 +57,7 @@ parseModuleFile filename = do
       criticalWithContext (MessageUnspecified doc)
     Trifecta.Success mod                      -> return mod
 
+-- | Resolves module import in the file system by searching the given library paths.
 fileSystemImportResolver :: [FilePath] -> AST.ModuleName -> KOSCCompilerT IO (AST.Module AST.RawName)
 fileSystemImportResolver searchPath modName = do
   let modPathRel = foldl1' (</>) (AST.moduleNameParts modName) ++ ".kc"
