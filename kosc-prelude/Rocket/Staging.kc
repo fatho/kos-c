@@ -1,0 +1,40 @@
+module Rocket::Staging;
+
+import KOS::Builtin unqualified;
+import KOS::Collections unqualified;
+import KOS::IO unqualified;
+import KOS::Math unqualified;
+import KOS::Cockpit unqualified;
+import KOS::Vessel unqualified;
+import KOS::Vessel::Parts unqualified;
+
+Boolean() Or(Boolean() a, Boolean() b) {
+  return () -> Boolean { return a() || b(); };
+}
+
+Boolean() IfNecessary(Boolean() cond) {
+  return () -> Boolean {
+  if (Stage.Ready && Stage.Number > 0) {
+    return cond();
+  } else {
+    return False;
+  } };
+}
+
+Boolean NoThrust() {
+  return Ship.AvailableThrust < 0.1;
+}
+
+Boolean Flameout() {
+  // if otherwise an engine has a flameout in the current stage, we will also stage
+  // this should make asparagus staging possible
+  List<Engine> engines = ListEngines(Ship);
+  for(Engine e : engines) {
+    if (e.Flameout) {
+      return True;
+    }
+  }
+  return False;
+}
+
+Boolean() ShouldStageDefault = IfNecessary(Or(NoThrust, Flameout));

@@ -1,0 +1,98 @@
+module Rocket::Maneuver;
+
+import KOS::Builtin unqualified;
+import KOS::Collections unqualified;
+import KOS::IO unqualified;
+import KOS::Math unqualified;
+import KOS::Maneuver unqualified;
+import KOS::Cockpit unqualified;
+import KOS::Orbits unqualified;
+import KOS::Time unqualified;
+import KOS::Vessel unqualified;
+
+import Rocket::Staging unqualified;
+
+ManeuverNode CircularizeAtApoapsis() {
+  Scalar mtime = Time.Seconds + ETA.Apoapsis;
+  Scalar v0 = VelocityAt(Ship, mtime).Orbit.Mag;
+  Scalar v1 = Sqrt(Ship.Body.Mu / (Ship.Body.Radius + Ship.Orbit.Apoapsis)); // Gravitational parameter mu = r * v^2
+  ManeuverNode cnode = Node(mtime, 0, 0, v1 - v0);
+  AddNode(cnode);
+  return cnode;
+}
+
+Void ExecuteNext(Scalar turnBufferTime = 90, Boolean() shouldStage = ShouldStageDefault) {
+  ManeuverNode mnode = NextNode;
+
+  Print ("Planning execution of node at ETA " + cast<String>(Round(mnode.ETA, 1)));
+
+  // TODO: fix this crude approximation of burn time.
+  Scalar accel = Ship.AvailableThrust / Ship.Mass;
+  Scalar burnTime = mnode.DeltaV.Mag / accel;
+
+  Print ("Estimated burn time " + cast<String>(Round(burnTime,1)));
+
+  Scalar orientationEta = mnode.ETA - burnTime / 2 - turnBufferTime - 10;
+  if (orientationEta > 0) {
+    //KUniverse:TimeWarp:WarpTo(time:seconds + orientationEta).
+  }
+
+  wait until (mnode.ETA <= (burnTime / 2 + turnBufferTime));
+
+  // stop time warping before executing maneuver.
+  //KUniverse:TimeWarp:CancelWarp().
+
+  Print ("Orienting ship.");
+
+  Vector upVec = Ship.Facing.TopVector;
+  Vector deltav0 = mnode.DeltaV;
+  Vector deltav0dir = deltav0.Normalized;
+  lock Steering = LookDirUp(mnode.DeltaV, upVec); // util_smoothRotate(lookdirup(mnode:deltav, upVec)).
+
+  // wait until the ship points in the same direction as the delta-v vector
+  wait until vdot(Ship.Facing.ForeVector.Normalized, deltav0dir) > 0.995;
+
+  Print ("Waiting for burn.");
+
+  // wait for burn
+
+  wait until (mnode.ETA <= burnTime / 2 + 30);
+
+  //KUniverse:TimeWarp:CancelWarp().
+
+  wait until (mnode.ETA <= burnTime / 2);
+
+  Print ("Commencing burn.");
+
+  Scalar cthrottle = 0;
+  lock Throttle = cthrottle;
+
+  Vector deltav = mnode.DeltaV;
+  Vector deltavdir = deltav.Normalized;
+
+  until (deltav.Mag < 0.05) {
+    cthrottle = Min(1, Max(0.05, (deltav.Mag / 50)^2));
+
+    // stop burn when deviating too much from initial burn vector
+    if (vdot(deltavdir, deltav0dir) < 0.5) {
+      Print ("Burn vector deviating too much.");
+      break;
+    }
+
+    if (shouldStage()) {
+      Print ("Staging.");
+      Stage;
+    }
+
+    wait (0);
+
+    deltav = mnode.DeltaV;
+    deltavdir = deltav.Normalized;
+  }
+
+  Print ("Burn completed.");
+  RemoveNode(mnode);
+
+  unlock Throttle;
+  unlock Steering;
+}
