@@ -18,8 +18,6 @@ import           KOSC.Compiler.Common
 import           KOSC.Compiler.ScopeChecker
 import qualified KOSC.Language.AST            as AST
 
-import           Debug.Trace
-
 -- | A type scheme quantifies over some generic variables and carries accessibility information.
 data TypeScheme = TypeScheme [AST.Ident] (AST.Type AST.ScopedName) AST.Accessibility
 

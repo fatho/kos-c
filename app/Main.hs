@@ -6,8 +6,6 @@ import           KOSC.Compiler
 import           Data.Foldable
 import           Data.Semigroup               ((<>))
 import           Options.Applicative
-import           System.Directory
-import           System.Environment
 import           System.IO
 import qualified Data.Text.Lazy.IO as L
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
