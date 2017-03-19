@@ -174,11 +174,16 @@ For an example of how to launch a rocket into LKO, see [kosc-prelude/Rocket](kos
 
 # Roadmap
 
+In no particular order, the following tasks are planned to be done sometime.
+
 - implement visibility system
 - better error messages (with source location)
 - automatically include bare minimum builtins?
 - also rename local variables
 - provide option for disabling renaming
+- add variadic functions (to allow easier construction of lists)
+- add fields to kOSDelegate (i.e. call and bind)
+- make starting point of code generation configurable (i.e. don't restrict to a function called main).
 
 # Setup
 
@@ -208,4 +213,12 @@ Void CustomName() "SomeName" {
 }
 
 Scalar CustomVar "SomeVar" = 2;
+```
+
+This will generate the following code (if these functions are actualy used):
+
+```
+FUNCTION SomeName {
+}
+DECLARE GLOBAL SomeVar IS 2.
 ```
