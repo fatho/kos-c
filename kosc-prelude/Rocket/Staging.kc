@@ -1,3 +1,4 @@
+// This module contains some combinators for building staging predicates.
 module Rocket::Staging;
 
 import KOS::Builtin unqualified;
@@ -8,26 +9,28 @@ import KOS::Cockpit unqualified;
 import KOS::Vessel unqualified;
 import KOS::Vessel::Parts unqualified;
 
+// Creates a predicate that returns true when either of the argument predicates returns true.
 Boolean() Or(Boolean() a, Boolean() b) {
   return () -> Boolean { return a() || b(); };
 }
 
-Boolean() IfNecessary(Boolean() cond) {
-  return () -> Boolean {
-  if (Stage.Ready && Stage.Number > 0) {
-    return cond();
-  } else {
-    return False;
-  } };
+// Creates a predicate that returns true when both of the argument predicates returns true.
+Boolean() And(Boolean() a, Boolean() b) {
+  return () -> Boolean { return a() && b(); };
 }
 
+// This returns true when staging is possible.
+Boolean CanStage() {
+  return Stage.Ready && Stage.Number > 0;
+}
+
+// Returns True if the available thrust drops to zero.
 Boolean NoThrust() {
   return Ship.AvailableThrust < 0.1;
 }
 
+// returns true if there is an engine flameout
 Boolean Flameout() {
-  // if otherwise an engine has a flameout in the current stage, we will also stage
-  // this should make asparagus staging possible
   List<Engine> engines = ListEngines(Ship);
   for(Engine e : engines) {
     if (e.Flameout) {
@@ -37,4 +40,5 @@ Boolean Flameout() {
   return False;
 }
 
-Boolean() ShouldStageDefault = IfNecessary(Or(NoThrust, Flameout));
+// Default staging predicate looks for engine flameouts
+Boolean() ShouldStageDefault = And(CanStage, Flameout);
