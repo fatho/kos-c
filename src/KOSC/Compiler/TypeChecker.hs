@@ -374,7 +374,7 @@ requireType :: MonadCompiler MessageContent m => TypeScheme -> TypeScheme -> Sta
 requireType (TypeScheme gen1 ty1 acc1) (TypeScheme gen2 ty2 acc2)
   | length gen1 /= length gen2 = messageWithContext MessageError $ MessageGenericTypeMismatch
   | otherwise =  do
-      isSub <- isSubtypeOf Covariant (substituteGenerics (Map.fromList $ zip gen1 (map (\g -> AST.TypeGeneric (AST.ScopedLocal g) []) gen2)) ty1) ty2
+      isSub <- isSubtypeOf Covariant ty2 (substituteGenerics (Map.fromList $ zip gen1 (map (\g -> AST.TypeGeneric (AST.ScopedLocal g) []) gen2)) ty1)
       when (not $ isSub && hasAccess acc1 acc2) $
         messageWithContext MessageError $ MessageTypesNotEqual ty1 ty2
 
