@@ -2,12 +2,12 @@ name:                kos-c
 version:             0.1.0.0
 -- synopsis:
 -- description:
-homepage:            https://github.com/githubuser/kos-c#readme
+homepage:            https://github.com/fatho/kos-c#readme
 license:             BSD3
 license-file:        LICENSE
-author:              Author name here
-maintainer:          example@example.com
-copyright:           2017 Author name here
+author:              Fabian Thorand
+maintainer:          f.thorand@gmail.com
+copyright:           2017 Fabian Thorand
 category:            Web
 build-type:          Simple
 extra-source-files:  README.md
@@ -66,4 +66,4 @@ test-suite kos-c-test
 
 source-repository head
   type:     git
-  location: https://github.com/githubuser/kos-c
+  location: https://github.com/fatho/kos-c
