@@ -174,14 +174,18 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
     requireAccess AST.Set lhsaccess
     requireType (TypeScheme gen lhsty AST.Get) rhsty
     return $ AST.SAssign lhs' rhs'
-  checkStmt s@(AST.SReturn ret) = use requiredReturnType >>= \case
+  checkStmt s@(AST.SReturn mret) = use requiredReturnType >>= \case
     Nothing -> do
       messageWithContext MessageError $ MessageUnspecified $ PP.text "Cannot return from here"
       return s
-    Just retType -> do
-      (ret', actualType) <- inferExpr ret
-      requireType retType actualType
-      return $ AST.SReturn ret'
+    Just retType -> case mret of
+      Nothing -> do
+        requireType retType (TypeScheme [] voidType AST.Get)
+        return s
+      Just ret -> do
+        (ret', actualType) <- inferExpr ret
+        requireType retType actualType
+        return $ AST.SReturn (Just ret')
   checkStmt (AST.SExpr ex) = AST.SExpr . view _1 <$> inferExpr ex -- just make sure some type IS can be inferred
   checkStmt (AST.SBlock stmts) = enterScope $ AST.SBlock <$> mapM checkStmt stmts
   checkStmt (AST.SIf cond sthen selse) = do
@@ -274,6 +278,7 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
   scalarType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Builtin", "Scalar"]) []
   stringType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Builtin", "String"]) []
   boolType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Builtin", "Boolean"]) []
+  voidType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Builtin", "Void"]) []
   vectorType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Math", "Vector"]) []
   directionType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Math", "Direction"]) []
   timeSpanType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Time", "TimeSpan"]) []

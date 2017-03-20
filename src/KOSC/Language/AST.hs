@@ -155,7 +155,7 @@ data Expr name
 data Stmt name
   = SDeclVar (Type name) Ident (Expr name)
   | SAssign (Expr name) (Expr name)
-  | SReturn (Expr name)
+  | SReturn (Maybe (Expr name))
   | SExpr (Expr name) -- ^ useful for expressions with side-effects such as function calls
   | SBlock [Stmt name]
   | SIf (Expr name) [Stmt name] [Stmt name]

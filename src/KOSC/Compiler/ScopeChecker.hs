@@ -177,7 +177,7 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
     insertLocalVars [name]
     AST.SDeclVar <$> checkType ty <*> pure name <*> checkExpr init
   checkStmt (AST.SAssign lhs rhs) = AST.SAssign <$> checkExpr lhs <*> checkExpr rhs
-  checkStmt (AST.SReturn ret) = AST.SReturn <$> checkExpr ret
+  checkStmt (AST.SReturn ret) = AST.SReturn <$> traverse checkExpr ret
   checkStmt (AST.SExpr ex) = AST.SExpr <$> checkExpr ex
   checkStmt (AST.SBlock stmts) = localScope $ AST.SBlock <$> traverse checkStmt stmts
   checkStmt (AST.SIf cond sthen selse) = AST.SIf <$> checkExpr cond <*> localScope (traverse checkStmt sthen) <*> localScope (traverse checkStmt selse)

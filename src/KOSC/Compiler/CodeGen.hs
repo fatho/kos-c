@@ -259,7 +259,7 @@ generateStatement s = case s of
     rcode <- generateExpression rhs
     return $ [qq|SET $lcode TO $rcode.$ln|]
   AST.SReturn ret -> do
-    rcode <- generateExpression ret
+    rcode <- maybe (pure "") generateExpression ret
     return $ [qq|RETURN $rcode.$ln|]
   AST.SExpr e -> do
     code <- generateExpression e

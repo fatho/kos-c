@@ -151,7 +151,7 @@ stmtExprP :: KOSCParser (Stmt RawName)
 stmtExprP = SExpr <$> exprP
 
 stmtReturnP :: KOSCParser (Stmt RawName)
-stmtReturnP = SReturn <$> (reserved "return" *> exprP)
+stmtReturnP = SReturn <$> (reserved "return" *> optional exprP)
 
 stmtBlockP :: KOSCParser (Stmt RawName)
 stmtBlockP = SBlock <$> stmtsP
@@ -163,7 +163,17 @@ stmtUntilP :: KOSCParser (Stmt RawName)
 stmtUntilP = SUntil <$> (reserved "until" *> parens exprP) <*> stmtsP
 
 stmtIfP :: KOSCParser (Stmt RawName)
-stmtIfP = SIf <$> (reserved "if" *> parens exprP) <*> stmtsP <*> option [] (reserved "else" *> stmtsP)
+stmtIfP = SIf <$> (reserved "if" *> parens exprP) <*> stmtsP <*>
+    (mkElse =<< many ((,) <$ reserved "else" <*> optional (reserved "if" *> parens exprP) <*> stmtsP))
+  where
+    mkElse [] = return []
+    mkElse ((Just cond, stmts):rest) = do
+       r <- mkElse rest
+       return [SIf cond stmts r]
+    mkElse ((Nothing, stmts):rest)
+      | null rest = return stmts
+      | otherwise = fail "'else' part cannot be followed by 'else if' parts or other 'else' parts"
+
 
 stmtForEachP :: KOSCParser (Stmt RawName)
 stmtForEachP = SForEach <$> (reserved "for" *> symbol "(" *> typeP) <*> ident varStyle
