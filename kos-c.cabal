@@ -11,6 +11,10 @@ copyright:           2017 Fabian Thorand
 category:            Web
 build-type:          Simple
 extra-source-files:  README.md
+data-files:          kosc-prelude/KOS/*.kc
+                     kosc-prelude/Rocket/*.kc
+                     kosc-prelude/Plane/*.kc
+                     kosc-prelude/*.kc
 cabal-version:       >=1.10
 
 library
