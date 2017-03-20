@@ -64,6 +64,7 @@ builtin structure PIDLoop {
   Scalar ITerm get;
   Scalar DTerm get;
   Scalar ChangeRate get;
+  Void Reset();
   Scalar Update(Scalar time, Scalar input);
 }
 

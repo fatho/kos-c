@@ -1,0 +1,23 @@
+module Util;
+
+import KOS::Builtin unqualified;
+import KOS::Math unqualified;
+import KOS::Geography unqualified;
+import KOS::Vessel unqualified;
+
+Scalar ComputeHeadingFrom(GeoCoordinates from, GeoCoordinates to) {
+  Scalar dLon = to.Lng - from.Lng;
+  Scalar y = Sin(dLon) * Cos(to.Lat);
+  Scalar x = Cos(from.Lat)*Sin(to.Lat) -
+          Sin(from.Lat)*Cos(to.Lat)*Cos(dLon);
+  Scalar brng = ArcTan2(y, x);
+  if (brng < 0) {
+    brng = brng + 360;
+  }
+  return brng;
+}
+
+// Converts a scalar to a string with the given format.
+String FmtS(Scalar sc, Scalar digits, Scalar width) {
+  return (cast<String>(Round(sc, digits)) + "").PadLeft(width);
+}

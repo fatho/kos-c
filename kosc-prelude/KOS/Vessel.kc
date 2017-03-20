@@ -17,6 +17,7 @@ builtin structure Vessel : Orbitable {
   Scalar MaxThrustAt(Scalar pressure);
   Scalar AvailableThrust get;
   Scalar AvailableThrustAt(Scalar pressure);
+  Direction Up get;
   Direction Facing get;
   Scalar Mass get;
   Scalar WetMass get;

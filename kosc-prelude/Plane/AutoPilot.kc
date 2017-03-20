@@ -1,0 +1,425 @@
+module Plane::AutoPilot;
+
+import KOS::Builtin unqualified;
+import KOS::Math unqualified;
+
+import KOS::Collections unqualified;
+import KOS::IO unqualified;
+import KOS::Math unqualified;
+import KOS::Cockpit unqualified;
+import KOS::Geography unqualified;
+import KOS::Time unqualified;
+import KOS::Vessel unqualified;
+import KOS::Vessel::Parts unqualified;
+
+import Util;
+
+// Controllers turning desired roll/pitch/yaw angles into control output
+PIDLoop RollController get = PIDLoop(0.02, 0.01, 0.01, -1, 1);
+PIDLoop PitchController get = PIDLoop(0.02, 0.005, 0.01, -1, 1);
+PIDLoop YawController get = PIDLoop(0.1,0.01,0.2, -1, 1);
+
+// Controller for turning airspeed into thrust
+PIDLoop ThrustController get = PIDLoop(0.1, 0.05, 0.01, 0.1, 1);
+
+// Controller turning a climb-rate into pitch
+PIDLoop ClimbController get = PIDLoop(1, 0.01, 0.01, -30, 30);
+
+// Some parameters affecting the flight behavior of the plane.
+record FlightParams {
+  // Lowest speed the plane can go without falling from the sky.
+  Scalar MinimumAirSpeed;
+  // Minimum speed the plane should be going before trying to pitch up
+  Scalar TakeOffSpeed;
+  // Pitch needed for taking off.
+  Scalar TakeOffPitch;
+  // Automatically engage and disengage after burner upon takeoff and landing
+  Boolean AutoEngageAfterburner;
+  // Maximum climb rate (m/s)
+  Scalar MaxClimbRate;
+  // Maximum descent rate (m/s) (as a negative number)
+  Scalar MaxDescentRate;
+  // Maximum allowed bank angle when auto pilot is controlling the angle.
+  Scalar MaxBankAngle;
+}
+
+// These parameters must be set prior to operation in order to adapt the
+// autopilot to the current plane
+FlightParams Params get = FlightParams {
+  MinimumAirSpeed = 100,
+  TakeOffSpeed = 100,
+  TakeOffPitch = 20,
+  AutoEngageAfterburner = True,
+  MaxClimbRate = 100,
+  MaxDescentRate = -100,
+  MaxBankAngle = 45
+ };
+
+// Empty structure used for emulating an enum type
+// The only way such a builtin structure can be generated is through the
+// builtin variables of the same type.
+builtin private structure State : Structure {}
+builtin private State StateLanded get "0"; // Any occurence of StateLanded is replaced by a literal '0' in the generated code
+builtin private State StateTakeOffAccelerate get "30"; // Plane is accelerating to take-off velocity
+builtin private State StateTakeOffPitchUp get "31"; // Plane is pitching up to take off
+builtin private State StateFlyByWireA get "10"; // 1st Fly-by-wire mode: plane is controlled by providing pitch, roll and yaw angles.
+builtin private State StateFlyByWireB get "11"; // 2nd Fly-by-wire mode: plane is controlled by providing desired climb-rate, roll and yaw angles
+builtin private State StateCruise get "12";  // Cruise mode: plane is controlled by providing desired altitude and heading
+builtin private State StateGroundTracking get "13";  // Ground tracking mode: plane is controlled by providing a target and a desired heading at the target.
+builtin private State StateLanding get "14";  // Landing: plane is controlled by providing a target and a desired heading at the target.
+builtin private State StateCoast get "20"; // Plane is currently on a sub-orbital trajectory, coast until atmospheric reentry, then switch to hold.
+builtin private State StateInoperable get "99";
+
+// current state of the auto pilot
+private State PilotState = StateLanded;
+
+// These variables are locked by the autopilot
+Scalar CurrentPitch = 0;
+Scalar CurrentRoll = 0;
+Scalar CurrentYaw = 0;
+
+Boolean Initialized = False;
+
+// How many ticks between updates
+Scalar UpdateFrequency = 4;
+Scalar CurrentTick = 0;
+
+GeoCoordinates NorthPole get = LatLng(90,0);
+Scalar CurrentHeading = 0;
+
+// Initializes the autopilot by checking the current state of the plane and setting the internal state accordingly.
+Void Engage() {
+  // Initialize locks
+  lock CurrentPitch = 90 - ArcCos(vdot(Ship.Up.ForeVector, Ship.Facing.ForeVector));
+  lock CurrentRoll = ArcCos(vdot(Ship.Up.ForeVector, Ship.Facing.StarVector)) - 90;
+  lock CurrentHeading = Mod(360 - NorthPole.Bearing, 360);
+
+  // initialize state
+  if (Ship.Status == "LANDED" || Ship.Status == "PRELAUNCH") {
+    PilotState = StateLanded;
+  } else if (Ship.Status == "FLYING") {
+    Cruise();
+  } else if (Ship.Status == "SUBORBITAL") {
+    PilotState = StateCoast;
+  } else {
+    // Out of specs
+    PilotState = StateInoperable;
+    Print("Cannot engage auto pilot under the current conditions.");
+    Print("If you think this is unjustified, please contact customer support.");
+    Print("Office hours: Mon-Wed 9:00 - 12:00");
+    Print("Phone number: 1-800 HELP-ME");
+  }
+  Initialized = True;
+  // Installs a trigger to update flight controls regularly
+  CurrentTick = 0;
+  when (True) {
+    CurrentTick = CurrentTick + 1;
+    if(CurrentTick == UpdateFrequency) {
+      Update();
+      CurrentTick = 0;
+    }
+    // preserve as long as autopilot is engaged
+    return Initialized;
+  }
+}
+
+Void Disengage() {
+  Initialized = False;
+}
+
+// Should be called once in a while (like probably multiple times per second) to update flight controls.
+// Make sure to call Init first.
+Void Update() {
+  if(PilotState == StateTakeOffPitchUp || PilotState == StateTakeOffAccelerate) {
+    UpdateTakeoff();
+  } else if (PilotState == StateCruise) {
+    UpdateCruise();
+  } else if (PilotState == StateFlyByWireA) {
+    UpdateFlyByWireA();
+  } else if (PilotState == StateFlyByWireB) {
+    UpdateFlyByWireB();
+  } else if (PilotState == StateGroundTracking) {
+    UpdateGroundTracking();
+  } else if (PilotState == StateLanding) {
+    UpdateLanding();
+  }
+}
+
+// Enables or disables afterburner
+Void SetAfterburner(Boolean enable) {
+  for(Engine e : ListEngines(Ship)) {
+    if (e.MultiMode) {
+      e.PrimaryMode = ! enable;
+    }
+  }
+}
+
+Scalar ComputeBearing(Scalar myHeading, Scalar otherHeading) {
+  Scalar HeadingDiff = otherHeading - myHeading;
+  if(HeadingDiff > 180) {
+    HeadingDiff = HeadingDiff - 360;
+  } else if(HeadingDiff < -180) {
+    HeadingDiff = HeadingDiff + 360;
+  }
+  return HeadingDiff;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// TAKEOFF MODE
+////////////////////////////////////////////////////////////////////////////////
+
+/* In this mode the autopilot takes full control of the plane (i.e. throttle,
+pitch, roll and yaw) in order to take off. When the plane is in the air and
+the landing gear has been retracted, this mode switches into cruise mode.
+Be sure to configure cruise parameters before that happens-
+*/
+
+// Assumes we are standing on a runway and adjusts the parameters according to
+// the current heading
+Void SetRunwayFromOrientation() {
+  RunwayTarget = Ship.Body.GeoPositionOf(Ship.Position + Ship.Facing.ForeVector * 5000);
+}
+
+GeoCoordinates RunwayTarget = Ship.GeoPosition;
+
+Void Takeoff() {
+  if (PilotState == StateLanded) {
+    Print("Switchting to Takeoff");
+    // Reset error terms of PID controllers
+    ThrustController.Reset();
+    PitchController.Reset();
+    RollController.Reset();
+    YawController.Reset();
+    // Preserve initial pitch
+    PitchController.Setpoint = CurrentPitch;
+    RollController.Setpoint = 0;
+    // We'll be controlling yaw relative to the runway target
+    YawController.Setpoint = 0;
+    ThrustController.Setpoint = Params.MinimumAirSpeed;
+
+    lock CurrentYaw = - RunwayTarget.Bearing;
+    Brakes = False;
+    PilotState = StateTakeOffAccelerate;
+  } else {
+    Print("Cannot take off under the current conditions");
+  }
+}
+
+Void UpdateTakeoff() {
+  Ship.Control.MainThrottle = ThrustController.Update(Time.Seconds, Ship.AirSpeed);
+  Ship.Control.Pitch = PitchController.Update(Time.Seconds, CurrentPitch);
+  Ship.Control.Roll = RollController.Update(Time.Seconds, CurrentRoll);
+  Ship.Control.Yaw = YawController.Update(Time.Seconds, CurrentYaw);
+  if (PilotState == StateTakeOffAccelerate) {
+    if (Ship.GroundSpeed > Params.TakeOffSpeed) {
+      PilotState = StateTakeOffPitchUp;
+      PitchController.Setpoint = Params.TakeOffPitch;
+    }
+  } else if (PilotState == StateTakeOffPitchUp) {
+    if (Ship.Altitude - Ship.GeoPosition.TerrainHeight > 50) {
+      Gear = False;
+      unlock CurrentYaw;
+      Cruise();
+    }
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Fly-By-Wire Mode A
+////////////////////////////////////////////////////////////////////////////////
+
+/* In this mode, the autopilot tries to hold the desired pitch and roll
+   angles specified by "WantPitch" and "WantRoll"
+   Yaw and throttle must be controlled by the calling program.
+*/
+
+Scalar WantRoll = 0;
+Scalar WantPitch = 0;
+
+Void FlyByWireA() {
+  Print("Switchting to Fly-By-Wire A");
+  PilotState = StateFlyByWireA;
+}
+
+Void UpdateFlyByWireA() {
+  PitchController.Setpoint = WantPitch;
+  RollController.Setpoint = WantRoll;
+  Ship.Control.Pitch = PitchController.Update(Time.Seconds, CurrentPitch);
+  Ship.Control.Roll = RollController.Update(Time.Seconds, CurrentRoll);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Fly-By-Wire Mode B
+////////////////////////////////////////////////////////////////////////////////
+
+/* In this mode, the autopilot tries to hold the desired climb rate and roll
+   angle specified by "WantClimb" and "WantRoll"
+   Yaw and throttle must be controlled by the calling program.
+*/
+
+Scalar WantClimb = 0;
+
+Void FlyByWireB() {
+  Print("Switchting to Fly-By-Wire B");
+  PilotState = StateFlyByWireB;
+}
+
+Void UpdateFlyByWireB() {
+  ClimbController.Setpoint = WantClimb;
+  WantPitch = ClimbController.Update(Time.Seconds, Ship.VerticalSpeed);
+  UpdateFlyByWireA();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// CRUISE MODE
+////////////////////////////////////////////////////////////////////////////////
+
+/* In this mode, the autopilot tries to hold the desired altitude, heading and
+   airspeed as specified by "WantAltitude", "WantHeading" and "WantAirspeed".
+*/
+
+Scalar WantAltitude = 10000;
+Scalar WantAirspeed = 500;
+Scalar WantHeading = 90;
+
+Scalar CruiseHeadingSmoothness = 10;
+
+// Enables cruise mode.
+Void Cruise() {
+  Print("Switchting to Cruise");
+  PilotState = StateCruise;
+}
+
+Void UpdateCruise() {
+  WantClimb = Min(Params.MaxClimbRate, Max(Params.MaxDescentRate, WantAltitude - Ship.Altitude));
+  // compute distance in heading
+  Scalar HeadingDiff = ComputeBearing(CurrentHeading, WantHeading);
+  Scalar g = Ship.Body.Mu / (Ship.Altitude + Ship.Body.Radius)^2;
+  WantRoll = Max(-Params.MaxBankAngle, Min(Params.MaxBankAngle, Ship.AirSpeed / (CruiseHeadingSmoothness * g) * HeadingDiff));
+  Ship.Control.Yaw = 0; // TODO: control yaw if necessary
+  // defer actual steering to fly-by-wire mode
+  UpdateFlyByWireB();
+  ThrustController.Setpoint = WantAirspeed;
+  Ship.Control.MainThrottle = ThrustController.Update(Time.Seconds, Ship.AirSpeed);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// GROUND TRACKING MODE
+////////////////////////////////////////////////////////////////////////////////
+
+/* In this mode, the autopilot is provided with a target location and a desired
+   heading at the target position.
+   This information is used to compute a desired current heading, which is
+   handled just as in cruise mode.
+   This mode just holds current flight parameters if the target is behind.
+*/
+
+GeoCoordinates WantTarget = LatLng(90,0);
+Scalar WantTargetHeading = 180;
+
+Void GroundTracking() {
+  Print("Switchting to Ground Tracking");
+  PilotState = StateGroundTracking;
+}
+
+Void UpdateGroundTracking() {
+  Scalar HeadingDiff = ComputeBearing(WantTargetHeading, WantTarget.Heading);
+  if(Abs(WantTarget.Bearing) > 180 || Abs(HeadingDiff) > 90) {
+    WantHeading = WantTargetHeading;
+    UpdateCruise();
+  } else {
+    Scalar separation = (Ship.Position - WantTarget.AltitudePosition(WantAltitude)).Mag;
+    Scalar fac = Constant.E ^ (- separation / 10000);
+    WantHeading = (WantTarget.Heading + HeadingDiff / 2) * (1 - fac) + WantTargetHeading * fac;
+  }
+  UpdateCruise();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// LANDING
+////////////////////////////////////////////////////////////////////////////////
+
+// TODO: better guidance on the last 5 km, split landing in approach and actual landing
+
+/* This mode approaches the given target point from a certain direction, reduces
+  airspeed to a minimum and lands on the runway that is hopefully there.
+*/
+
+Scalar landingState = 0;
+GeoCoordinates landingTouchdown = LatLng(90, 0);
+GeoCoordinates landingEnd = LatLng(90, 0);
+Scalar landingApproachDist = 100000;
+Scalar landingHeading = 0;
+GeoCoordinates landingApproach = LatLng(90, 0);
+Scalar landingApproachSpeed = 0;
+
+Void Landing(GeoCoordinates touchDown, GeoCoordinates endPos, Scalar approachDist = 100000) {
+  Print("Switchting to Landing");
+  PilotState = StateLanding;
+  landingState = 0;
+  landingTouchdown = touchDown;
+  landingEnd = endPos;
+  landingHeading = Util::ComputeHeadingFrom(touchDown, endPos);
+  landingApproachDist = approachDist;
+  landingApproach = Ship.Body.GeoPositionOf(touchDown.Position + (touchDown.Position - endPos.Position).Normalized * approachDist);
+}
+
+Void UpdateLanding() {
+  if(landingState == 0) {
+    if(Abs(landingApproach.Bearing) > 30) {
+      WantHeading = landingApproach.Heading;
+      UpdateCruise();
+    } else {
+      landingState = 1;
+      Print("Switch to" + cast<String>(landingState));
+    }
+  } else if(landingState == 1) {
+    if(Abs(landingApproach.Bearing) < 90) {
+      WantTarget = landingApproach;
+      WantTargetHeading = landingHeading;
+      UpdateGroundTracking();
+    } else {
+      landingState = 2;
+      landingApproach = Ship.Body.GeoPositionOf(landingTouchdown.Position + (landingTouchdown.Position - landingEnd.Position).Normalized * 3000);
+      landingApproachSpeed = WantAirspeed;
+      WantAirspeed = Params.MinimumAirSpeed;
+      Print("Switch to" + cast<String>(landingState));
+    }
+  } else if (landingState == 2) {
+    if(Abs(landingApproach.Bearing) < 90) {
+      WantAltitude = landingTouchdown.TerrainHeight + Sin(3) * landingTouchdown.Distance;
+      WantTarget = landingTouchdown;
+      Scalar scale = (landingTouchdown.Distance  / landingApproachDist);
+      WantAirspeed = scale * landingApproachSpeed + (1 - scale) * Params.MinimumAirSpeed;
+      ThrustController.Reset();
+      UpdateGroundTracking();
+    } else {
+      Gear = True;
+      landingState = 3;
+      WantClimb = - Sin(3) * Ship.AirSpeed;
+      WantRoll = 0;
+      Print("Switch to" + cast<String>(landingState));
+    }
+  } else if(landingState == 3) {
+    Ship.Control.PilotMainThrottle = 0;
+    Ship.Control.MainThrottle = 0;
+    UpdateFlyByWireB();
+    if(Ship.Status == "LANDED") {
+      lock WheelSteering = Heading(landingHeading);
+      Brakes = True;
+      WantPitch = 0;
+      landingState = 4;
+      Print("Touchdown");
+    }
+  } else {
+    // TODO: use rudder and wheelsteering to stay on runway
+    Ship.Control.MainThrottle = 0;
+    UpdateFlyByWireA();
+    if(Ship.GroundSpeed < 1) {
+      unlock WheelSteering;
+      Print("Landed");
+      PilotState = StateLanded;
+    }
+  }
+}

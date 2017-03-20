@@ -41,4 +41,4 @@ Boolean Flameout() {
 }
 
 // Default staging predicate looks for engine flameouts
-Boolean() ShouldStageDefault = And(CanStage, Flameout);
+Boolean() ShouldStageDefault = And(CanStage, Or(NoThrust, Flameout));
