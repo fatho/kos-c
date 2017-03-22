@@ -1,0 +1,19 @@
+module KOS::Universe;
+
+import KOS::Builtin unqualified;
+import KOS::Collections unqualified;
+import KOS::Math unqualified;
+import KOS::Orbits unqualified;
+
+// TODO: rest of kuniverse
+
+builtin structure KUniverse : Structure {
+  TimeWarp TimeWarp get;
+}
+
+builtin KUniverse KUniverse get;
+
+builtin structure TimeWarp : Structure {
+  Void WarpTo(Scalar universalTime);
+  Void CancelWarp();
+}

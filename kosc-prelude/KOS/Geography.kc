@@ -35,6 +35,8 @@ builtin structure Body : Orbitable {
   Scalar RotationAngle get;
 }
 
+builtin Body Body(String name);
+
 builtin structure Atmosphere {
   String Body get;
   Boolean Exists get;
