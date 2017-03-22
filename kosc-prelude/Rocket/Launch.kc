@@ -5,10 +5,15 @@ import KOS::Collections unqualified;
 import KOS::IO unqualified;
 import KOS::Math unqualified;
 import KOS::Cockpit unqualified;
+import KOS::Time unqualified;
+import KOS::Orbits unqualified;
 import KOS::Vessel unqualified;
 import KOS::Vessel::Parts unqualified;
 
+import KOS::Universe unqualified;
+
 import Rocket::Staging unqualified;
+import Util unqualified;
 
 record LaunchProfile {
   Scalar targetApoapsis; // desired altitude of apoapsis [m]
@@ -115,4 +120,48 @@ Void Launch(LaunchProfile ascent, Boolean() shouldStage = ShouldStageDefault) {
   unlock Steering;
 
   Print ("Reached space.");
+}
+
+Void LaunchToInclination(Orbitable target, LaunchProfile ascendProfile) {
+  Orbit targetOrbit = target.Orbit;
+  Scalar targetInclination = targetOrbit.Inclination;
+
+  if (targetInclination < Ship.Latitude) {
+    Print("Cannot launch to inclination below latitude, adjusting inclination.");
+    targetInclination = Ship.Latitude;
+  }
+
+  // compute inertial (w/o accounting for body's rotation) launch azimuth
+  Scalar inertialAzimuth = ArcSin(Cos(targetInclination) / Cos(Ship.Latitude));
+
+  // desired orbital velocity
+  Scalar vOrbit = Ship.Body.Mu / (Ship.Body.Radius + ascendProfile.targetApoapsis);
+
+  // TODO: somehow take into account direction of rotation
+  // ship movement due to body rotation (assuming we are standing still)
+  Scalar vEqRot = Ship.Body.AngularVel.Mag / Constant.Pi * Ship.Body.Radius;
+
+  // compute rotation-adjusted velocity vector
+  Scalar vXRot = vOrbit * Sin(inertialAzimuth) - vEqRot * Cos(Ship.Latitude);
+  Scalar vYRot = vOrbit * Cos(inertialAzimuth);
+
+  // find launch angle of rotated vector
+  Scalar rotAzimuth = ArcTan2(vXRot, vYRot);
+  ascendProfile.launchAzimuth = rotAzimuth;
+  Print("Launch Azimuth: " +  FmtS(rotAzimuth,1,4) + " deg");
+
+  // compute time when launch site intersects target orbit
+  Scalar targetLon = targetOrbit.LAN;
+  Scalar shipLonCel = Ship.Longitude + Ship.Body.RotationAngle;
+
+  until (targetLon > shipLonCel) {
+    targetLon = targetLon + 360;
+  }
+
+  Scalar launchEta = (targetLon - shipLonCel) * Constant.DegToRad / Ship.Body.AngularVel.Mag;
+  Print("Launch ETA: " + FmtS(launchEta, 0, 5) + " s");
+  KUniverse.TimeWarp.WarpTo(Time.Seconds + launchEta - 10);
+  wait launchEta;
+
+  Launch(ascendProfile);
 }
