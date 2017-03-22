@@ -50,8 +50,12 @@ data CodeGenState = CodeGenState
   -- ^ Term level declarations (i.e. global functions and variables) of all imported modules.
   , _generatedCode    :: Map AST.ScopedName L.Text
   -- ^ Mapping from top-level entities (functions or vars so far) to the code that has been generated for them (if any).
+  , _priorities       :: Map AST.ScopedName Integer
+  -- ^ Mapping from top-level entities (functions or vars so far) to a priority indicating their position in the generated file.
   , _fresh            :: Integer
   -- ^ Used for generating fresh names.
+  , _priority         :: Integer
+  -- ^ Used for generating priority numbers
   }
 
 makeLenses ''CodeGenState
@@ -85,13 +89,19 @@ codeGen imports mainModule = evalStateT go initialState where
     , _typeDeclarations = foldOf (folded . scopedModuleAST . to (exportDecls exportTypeDecl) ) imports
     , _termDeclarations = foldOf (folded . scopedModuleAST . to (exportDecls exportTermDecl) ) imports
     , _generatedCode = Map.empty
+    , _priorities = Map.empty
     , _fresh = 0
+    , _priority = 0
     }
 
   go = do
     -- start code generation on main module
     mainName <- generateIfRequired (AST.makeGlobalName mainModule "Main")
-    declCode <- uses generatedCode fold
+    code <- use generatedCode
+    -- order generated code by priorities
+    prs <- use priorities
+    let orderedCode = Map.mapKeys (\name -> Map.findWithDefault 0 name prs) code
+        declCode = foldMap snd $ Map.toDescList orderedCode
     -- emit a call to the generated main function at the end of the script
     return $ L.append declCode [qq|$mainName().|]
 
@@ -100,39 +110,48 @@ codeGen imports mainModule = evalStateT go initialState where
 freshName :: Monad m => CodeGenM m GeneratedName
 freshName = nameBase36 <$> (fresh <<+= 1)
 
+-- | Generates a fresh name. Currently, it uses base 36 numbers prefixed with an underscore
+-- in order to make names as short as possible.
+nextPriority :: Monad m => CodeGenM m Integer
+nextPriority = priority <<+= 1
+
 -- | Generates the entity referred to by the scoped name, if it has not yet been generated.
 -- Returns the generated name of the requested entity.
 -- This is the core of the lazy code generation. If a name is never requested, it will never generate code for its definition.
 generateIfRequired :: Monad m => AST.ScopedName -> CodeGenM m GeneratedName
 generateIfRequired sname = use (generatedNames . at sname) >>= \case
   Just genName -> return genName -- we already generated that
-  Nothing -> use (termDeclarations . at sname) >>= \case
-    Nothing -> criticalWithContext $ MessageUnspecified $ PP.text "Undeclared identifier found in code generator. This is a bug."
-    Just td -> case td of
-      Fun fdef -> do
-        -- it is important to FIRST generate and register the name, and then start generating the function body
-        -- otherwise, this would fail for recursive functions
-        name <- maybe freshName (pure . L.pack) (fdef ^. AST.funDeclSignature . AST.funSigOutputName)
-        generatedNames . at sname .= Just name
-        fcode <- enterDecl (fdef ^. AST.funDeclSignature . AST.funSigName) $ generateFunction name fdef
-        generatedCode . at sname .= Just fcode
-        return name
-      Var vdef -> do
-        -- variables are handled similar to functions
-        name <- freshName
-        generatedNames . at sname .= Just name
-        vcode <- enterDecl (vdef ^. AST.varDeclSignature . AST.varSigName) $ generateVar name vdef
-        generatedCode . at sname .= Just vcode
-        return name
-        -- builtins do not generate code, and we never rename them
-      BuiltinFun sig -> do
-        let genname = L.pack $ fromMaybe (sig ^. AST.funSigName) (sig ^. AST.funSigOutputName)-- preserve names for builtins
-        generatedNames . at sname .= Just genname
-        return genname
-      BuiltinVar sig -> do
-        let genname = L.pack $ fromMaybe (sig ^. AST.varSigName) (sig ^. AST.varSigOutputName)-- preserve names for builtins
-        generatedNames . at sname .= Just genname
-        return genname
+  Nothing -> do
+    -- assign next priority number for this thing
+    nextP <- nextPriority
+    priorities . at sname .= Just nextP
+    use (termDeclarations . at sname) >>= \case
+      Nothing -> criticalWithContext $ MessageUnspecified $ PP.text "Undeclared identifier found in code generator. This is a bug."
+      Just td -> case td of
+        Fun fdef -> do
+          -- it is important to FIRST generate and register the name, and then start generating the function body
+          -- otherwise, this would fail for recursive functions
+          name <- maybe freshName (pure . L.pack) (fdef ^. AST.funDeclSignature . AST.funSigOutputName)
+          generatedNames . at sname .= Just name
+          fcode <- enterDecl (fdef ^. AST.funDeclSignature . AST.funSigName) $ generateFunction name fdef
+          generatedCode . at sname .= Just fcode
+          return name
+        Var vdef -> do
+          -- variables are handled similar to functions
+          name <- freshName
+          generatedNames . at sname .= Just name
+          vcode <- enterDecl (vdef ^. AST.varDeclSignature . AST.varSigName) $ generateVar name vdef
+          generatedCode . at sname .= Just vcode
+          return name
+          -- builtins do not generate code, and we never rename them
+        BuiltinFun sig -> do
+          let genname = L.pack $ fromMaybe (sig ^. AST.funSigName) (sig ^. AST.funSigOutputName)-- preserve names for builtins
+          generatedNames . at sname .= Just genname
+          return genname
+        BuiltinVar sig -> do
+          let genname = L.pack $ fromMaybe (sig ^. AST.varSigName) (sig ^. AST.varSigOutputName)-- preserve names for builtins
+          generatedNames . at sname .= Just genname
+          return genname
 
 -- | Generates code for a name. Local variables are returned as-is, global variables might trigger further code generation.
 generateName :: Monad m => AST.ScopedName -> CodeGenM m GeneratedName
