@@ -1,0 +1,287 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Installation &mdash; kOS-C 0.2.0.0 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="genindex.html"/>
+        <link rel="search" title="Search" href="search.html"/>
+    <link rel="top" title="kOS-C 0.2.0.0 documentation" href="index.html"/>
+        <link rel="prev" title="kOS-C: A Typed Language for kOS" href="index.html"/> 
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="index.html" class="icon icon-home"> kOS-C
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.2
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Installation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#binary-releases">Binary releases</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#build-instructions">Build Instructions</a></li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">kOS-C</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html">Docs</a> &raquo;</li>
+        
+      <li>Installation</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/installation.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="installation">
+<span id="id1"></span><h1>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="binary-releases">
+<h2>Binary releases<a class="headerlink" href="#binary-releases" title="Permalink to this headline">¶</a></h2>
+<p>The latest binary releases of the <strong>kOS-C</strong> compiler for Windows and Linux can
+be obtained from the <a class="reference external" href="https://github.com/fatho/kos-c/releases/latest">GitHub repository</a>. The zip files contain the
+compiler binary itself as well as a &#8220;prelude&#8221; library that contains the bindings
+to kOS and some commonly functionality that might be useful.</p>
+<p>Be aware that the Linux binaries are compiled on Arch Linux and might not work
+on other distributions. Moreover, I can only provide 64 bit builds at the
+moment. If the binaries are incompatible with your system, proceed to the next
+section in order to learn how to compile <strong>kOS-C</strong> yourself.</p>
+</div>
+<div class="section" id="build-instructions">
+<span id="buildinstructions"></span><h2>Build Instructions<a class="headerlink" href="#build-instructions" title="Permalink to this headline">¶</a></h2>
+<p>The compiler is written in Haskell, but since the project is compatible with
+<a class="reference external" href="https://www.haskellstack.org">Stack</a>, it should be fairly easy to compile.
+Assuming that stack has been installed according to the linked documentation,
+the following steps need to be done.</p>
+<ol class="arabic simple">
+<li>Clone the <strong>kOS-C</strong> source code from the <a class="reference external" href="https://github.com/fatho/kos-c">GitHub repository</a>.<ul>
+<li>The <code class="docutils literal"><span class="pre">master</span></code> branch contains the source code corresponding to the latest release.</li>
+<li>The <code class="docutils literal"><span class="pre">develop</span></code> branch contains the current development version of <strong>kOS-C</strong>, and therefore might be less usable and contain more bugs.</li>
+<li>There are tags corresponding to every release so far.</li>
+</ul>
+</li>
+<li>Open a terminal/command prompt and change into the root directory of the
+repository cloned in the first step.</li>
+<li>If you never used Haskell before, or do not have GHC <a class="footnote-reference" href="#ghc" id="id2">[1]</a> 8.0.2 installed
+and configured stack to use it, you can install it by executing <code class="docutils literal"><span class="pre">stack</span>
+<span class="pre">setup</span></code>. Stack will install GHC into a local directory where it will not
+interfere with any system wide installations.</li>
+<li>Once GHC is installed, you can issue <code class="docutils literal"><span class="pre">stack</span> <span class="pre">build</span></code> in order to build <strong>kOS-C</strong>.</li>
+<li>If everything went well, an executable named <code class="docutils literal"><span class="pre">koscc</span></code> (the <strong>kOS-C Compiler</strong>) can
+now be found in a sub-directory of <code class="docutils literal"><span class="pre">.stack-work/install/</span></code> whose exact name
+depends on the system architecture and operating system.<ul>
+<li>Optionally, you can use <code class="docutils literal"><span class="pre">stack</span> <span class="pre">install</span></code> in order to let stack copy the
+executable into the local user&#8217;s binary directory. On Linux, that is usually
+<code class="docutils literal"><span class="pre">~/.local/bin</span></code>, on Windows <code class="docutils literal"><span class="pre">%APPDATA%\local\bin</span></code>.</li>
+<li>Another option is to use the command <code class="docutils literal"><span class="pre">stack</span> <span class="pre">exec</span> <span class="pre">koscc</span></code> to run the
+generated executable. Any arguments that are meant for <strong>kOS-C</strong> must be
+separated with two dashes (<code class="docutils literal"><span class="pre">--</span></code>) from the rest of the command line, i.e.
+<code class="docutils literal"><span class="pre">stack</span> <span class="pre">exec</span> <span class="pre">koscc</span> <span class="pre">--</span> <span class="pre">arguments</span> <span class="pre">go</span> <span class="pre">here</span></code>.</li>
+</ul>
+</li>
+</ol>
+<table class="docutils footnote" frame="void" id="ghc" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id2">[1]</a></td><td><a class="reference external" href="https://www.haskell.org/ghc/">The Glasgow Haskell Compiler</a></td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+      
+        <a href="index.html" class="btn btn-neutral" title="kOS-C: A Typed Language for kOS" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2017, Fabian Thorand.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'./',
+            VERSION:'0.2.0.0',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: '.txt'
+        };
+    </script>
+      <script type="text/javascript" src="_static/jquery.js"></script>
+      <script type="text/javascript" src="_static/underscore.js"></script>
+      <script type="text/javascript" src="_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

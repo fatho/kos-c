@@ -1,0 +1,5 @@
+.. _buildinstructions:
+
+How to build kOS-C
+==================
+
