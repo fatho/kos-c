@@ -1,6 +1,12 @@
 # Changelog
 
-## v.0.2.0.0 - 2017-04-04
+## v.0.2.0.1 (2017-04-04)
+
+### Builtins
+
+- Added missing `Vessel` constructor.
+
+## v.0.2.0.0 (2017-04-04)
 
 ### Compiler
 
@@ -17,6 +23,6 @@
 
 - Added function for launching into inclined orbit.
 
-## v0.1.0.0 - 2017-03-20
+## v0.1.0.0 (2017-03-20)
 
 Initial Release
