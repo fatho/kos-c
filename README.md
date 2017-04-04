@@ -8,6 +8,10 @@ The inspiration for this project came from a certain incident where one of my dr
 
 Thus, in order to prevent such frustrating incidents in the future, `kos-c` was born.
 
+# Documentation
+
+There is currently a work-in-progress documentation that can be found [here](http://www.fthorand.de/kos-c/index.html).
+
 # Language Features
 
 The language exposes all features that are also available in kOS scripts (unless I forgot some), and even a little more.
