@@ -8,6 +8,7 @@ release_dir="release-packages"
 if [ ! -f "$cabal_file" ]; then
     # require that this is run from the root of our stack project
     echo "Not ran inside project root." >&2
+    exit 1
 fi
 
 # create dir
@@ -17,6 +18,7 @@ mkdir -p "$release_dir"
 stack build
 if [ $? -ne 0 ]; then
     echo "Error building project." >&2
+    exit 1
 fi
 
 # find version
