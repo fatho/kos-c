@@ -12,6 +12,7 @@ import           Control.Monad.State
 import           Data.Foldable
 import           Data.Map.Strict              (Map)
 import qualified Data.Map.Strict              as Map
+import qualified Data.Set                     as Set
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
 
 import           KOSC.Compiler.Common
@@ -37,19 +38,28 @@ makeLenses ''TypeEnv
 typeChecker :: Monad m => Map AST.ModuleName ScopedModule -> ScopedModule -> KOSCCompilerT m ScopedModule
 typeChecker imports inputMod = evalStateT checkModule initialEnv where
   -- combine all exports of all modules
-  initialEnv = TypeEnv Map.empty Nothing (foldOf (folded . scopedModuleTypes) imports)
+  initialEnv = TypeEnv
+    { _typeMap = Map.empty -- no identifiers declared yet
+    , _requiredReturnType = Nothing -- nothing to return on the top level
+    , _globalTypeMap = foldOf (folded . scopedModuleTypes) imports -- aggregate information about exported types from all imported modules
+    }
 
   -- the following functions recursively traverse the AST and implement the typing rules
   -- since there is no formal description of the type system yet, there are some ad-hoc
   -- decisions that have been made that probably could be solved in better ways.
 
   checkModule = do
+    -- gather types of globally declared identifiers
     populateGlobalTypeEnv imports
     enterModule (inputMod ^. scopedModuleAST . AST.moduleName) $
+      -- check every declaration of the current module
       mapMOf (scopedModuleAST . AST.declarations . traversed) checkDecl inputMod
 
   checkDecl (AST.DeclFun fdecl) = AST.DeclFun <$> checkFunDecl fdecl
   checkDecl (AST.DeclVar vdecl) = AST.DeclVar <$> checkVarDecl vdecl
+  checkDecl d@(AST.DeclBuiltin (AST.BuiltinStruct ssig)) = do
+    validateInheritance (AST.makeGlobalName (inputMod ^. scopedModuleAST . AST.moduleName) (ssig ^. AST.structSigName))
+    return d
   checkDecl other               = return other
 
   checkFunDecl (AST.FunDecl sig body) = enterScope $ enterDecl (sig ^. AST.funSigName) $ do
@@ -74,7 +84,7 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
     (e', tysc@(TypeScheme _ _ access)) <- inferExpr e
     ty <- requireNonGeneric tysc
     requireAccess AST.Get access
-    fty <- findField field ty ty
+    fty <- findField field ty
     -- if an accessor has a function type, again add the @ sign
     if isFunctionScheme fty
       then return $ (AST.EAt (AST.EAccessor e' (Just ty) field), fty)
@@ -84,7 +94,7 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
     indexedTy <- requireNonGeneric indexedTySc
     requireAccess AST.Get access
     (eidx', indexTy) <- inferExpr eidx
-    TypeScheme [] idxField idxAccess <- findField "[]" indexedTy indexedTy
+    TypeScheme [] idxField idxAccess <- findField "[]" indexedTy
     case idxField of
       AST.TypeFunction idxRet [reqIdxTy] _ -> do
         requireType (TypeScheme [] reqIdxTy AST.Get) indexTy
@@ -131,7 +141,7 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
         -- when calling something that was previously wrapped in an @ sign, remove it again
         let fNoAt = case f' of
               AST.EAt e -> e
-              _ -> f'
+              _         -> f'
         return (AST.ECall fNoAt tyargs args', TypeScheme [] (substituteGenerics gensubst retTy) AST.Get)
       other -> do
         messageWithContext MessageError $ MessageFunctionExpected other
@@ -142,7 +152,7 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
   inferExpr (AST.ERecordInit recName tyArgs fields) = do
     let recTy = AST.TypeGeneric recName tyArgs
     fields' <- forM fields $ \(name, expr) -> do
-      (TypeScheme fgen fty' _) <- findField name recTy recTy
+      (TypeScheme fgen fty' _) <- findField name recTy
       (expr', ety) <- inferExpr expr
       requireType (TypeScheme fgen fty' AST.Get) ety
       return (name, expr')
@@ -237,41 +247,6 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
         return (AST.Param ty name (Just e'))
     return (AST.FunSig vis ret name gens params' outName)
 
-  -- searches a field of a type
-  findField fieldName startedTy ty =
-    let notFound = do
-          messageWithContext MessageError $ MessageFieldNotFound startedTy fieldName
-          return (TypeScheme [] unknownType AST.GetOrSet)
-    in case ty of
-         AST.TypeGeneric n tyargs -> use (globalTypeMap . at n) >>= \case
-           Nothing -> notFound
-           Just scty -> case scty of
-             ScopedStruct ssig -> do
-               when (length (ssig ^. AST.structSigGenerics) /= length tyargs) $ messageWithContext MessageError $ MessageGenericTypeMismatch
-               -- substitute generic variables of *the structure*
-               let gensubst = Map.fromList $ zip (ssig ^. AST.structSigGenerics) tyargs
-               case findFieldSig fieldName (ssig ^. AST.structSigFields) of
-                 Just (TypeScheme genvars ty acc) -> do
-                   -- exempt shadowed generic variables of the field from the substitution
-                   let gensubst' = foldr Map.delete gensubst genvars
-                   return $ TypeScheme genvars (substituteGenerics gensubst' ty) acc
-                 Nothing -> case ssig ^. AST.structSigSuper of -- try super structure
-                   Nothing -> notFound
-                   Just tySuper -> findField fieldName startedTy (substituteGenerics gensubst tySuper)
-  -- TODO: implement special logic for the ":CALL" and ":BIND" fields that are present on function types
-         AST.TypeFunction _ _ _ -> notFound
-
-  -- searches for a field in a list of fields
-  findFieldSig _ [] = Nothing
-  findFieldSig fieldName (sig:sigs) = case sig of
-    AST.FieldFunSig fsig
-      | fsig ^. AST.funSigName == fieldName -> Just (funSigToTypeScheme fsig)
-    AST.FieldVarSig vsig
-      | vsig ^. AST.varSigName == fieldName -> Just (varSigToTypeScheme vsig)
-    AST.FieldIndexSig isig
-      | fieldName == "[]" -> Just (indexSigToTypeScheme isig)
-    _ -> findFieldSig fieldName sigs
-
   -- predefined types
   -- FIXME: make it so that these do not require a hard-coded type name
   structType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Builtin", "Structure"]) []
@@ -283,7 +258,6 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
   directionType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Math", "Direction"]) []
   timeSpanType = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Time", "TimeSpan"]) []
   enumerableType a = AST.TypeGeneric (AST.ScopedGlobal ["KOS", "Collections", "Enumerable"]) [a]
-  unknownType = AST.TypeGeneric (AST.ScopedLocal "__UNKNOWN__") []
 
   -- table containing possible overloads of binary operators
   operatorOverloads binOp = case binOp of
@@ -330,10 +304,12 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
     put env
     return r
 
+-- * Type Predicates
+
 -- | Is the type scheme representing a function?
 isFunctionScheme :: TypeScheme -> Bool
 isFunctionScheme (TypeScheme _ (AST.TypeFunction _ _ _) _) = True
-isFunctionScheme _ = False
+isFunctionScheme _                                         = False
 
 -- | Checks whether the type scheme is generic, and emits an error message in that case
 requireNonGeneric :: MonadCompiler MessageContent m => TypeScheme -> m (AST.Type AST.ScopedName)
@@ -361,6 +337,20 @@ hasAccess required actual = case required of
   AST.Get      -> actual /= AST.Set
   AST.Set      -> actual /= AST.Get
   AST.GetOrSet -> actual == AST.GetOrSet
+
+-- | Checks inheritance hierarchies for circular definitions.
+validateInheritance :: MonadCompiler MessageContent m => AST.ScopedName -> StateT TypeEnv m ()
+validateInheritance = go Set.empty where
+  go visited name
+    | Set.member name visited = messageWithContext MessageError $ MessageCircularInheritance name
+    | otherwise = use (globalTypeMap . at name) >>= \case
+        Nothing -> return ()
+        Just (ScopedStruct ssig) -> case ssig ^. AST.structSigSuper of
+          Nothing -> return ()
+          Just (AST.TypeGeneric superTy _) -> go (Set.insert name visited) superTy
+          Just (AST.TypeFunction _ _ _) -> return () -- does it make sense to allow deriving from functions?
+
+-- * Subtyping
 
 -- | Variance when checking subtyping
 data Variance
@@ -417,21 +407,28 @@ isSubtypeOf = compareTypes where
     checkCast Contravariant n1 args1 n2 args2 = (n2, args2) `isSubStructOf` (n1, args1)
 
 -- | Checks whether the first structure derives from the second.
-isSubStructOf :: MonadCompiler MessageContent m => (AST.ScopedName, [AST.Type AST.ScopedName]) -> (AST.ScopedName, [AST.Type AST.ScopedName]) -> StateT TypeEnv m Bool
-isSubStructOf (n1, tyargs1) (n2, tyargs2)
-  | n1 == n2 && tyargs1 == tyargs2 = return True
-  | otherwise = do
-      ty1 <- use (globalTypeMap . at n1)
-      case ty1 of
-        Just (ScopedStruct ssig)
-          | length (ssig ^. AST.structSigGenerics) /= length tyargs1 -> return False
-          | otherwise -> do
-              -- substitute generic variables of *the structure*
-              let gensubst = Map.fromList $ zip (ssig ^. AST.structSigGenerics) tyargs1
-              case ssig ^. AST.structSigSuper of -- try super structure
-                Just (AST.TypeGeneric nsuper argsSuper) -> isSubStructOf (nsuper, map (substituteGenerics gensubst) argsSuper) (n2, tyargs2)
-                _ -> return False
-        Nothing -> criticalWithContext $ MessageUnspecified $ PP.text "Unknown type encountered during type checking:" PP.<+> PP.pretty n1 PP.<+> PP.text "This is a bug."
+isSubStructOf :: MonadCompiler MessageContent m
+              => (AST.ScopedName, [AST.Type AST.ScopedName]) -- ^ name and generic type arguments of the first struct
+              -> (AST.ScopedName, [AST.Type AST.ScopedName]) -- ^ name and generic type arguments of the second struct
+              -> StateT TypeEnv m Bool
+isSubStructOf = go Set.empty where
+  go visited (n1, tyargs1) (n2, tyargs2)
+    | n1 == n2 && tyargs1 == tyargs2 = return True
+    | Set.member n1 visited = return False -- circular inheritance
+    | otherwise = do
+        ty1 <- use (globalTypeMap . at n1)
+        case ty1 of
+          Just (ScopedStruct ssig)
+            | length (ssig ^. AST.structSigGenerics) /= length tyargs1 -> return False
+            | otherwise -> do
+                -- substitute generic variables of *the structure*
+                let gensubst = Map.fromList $ zip (ssig ^. AST.structSigGenerics) tyargs1
+                case ssig ^. AST.structSigSuper of -- try super structure
+                  Just (AST.TypeGeneric nsuper argsSuper) -> go (Set.insert n1 visited) (nsuper, map (substituteGenerics gensubst) argsSuper) (n2, tyargs2)
+                  _ -> return False
+          Nothing -> criticalWithContext $ MessageUnspecified $ PP.text "Unknown type encountered during type checking:" PP.<+> PP.pretty n1 PP.<+> PP.text "This is a bug."
+
+-- * Managing Type Environment
 
 -- | Builds the environment required for checking a function body by bringing all the parameters in scope.
 buildFunctionEnv :: Monad m => AST.FunSig AST.ScopedName -> StateT TypeEnv m ()
@@ -462,3 +459,53 @@ populateGlobalTypeEnv = imapMOf_ (folded . scopedModuleVars . ifolded) $ \name s
   case sig of
     ScopedFun fsig -> typeMap . at name .= Just (funSigToTypeScheme fsig)
     ScopedVar vsig -> typeMap . at name .= Just (varSigToTypeScheme vsig)
+
+-- * Querying Type Environment
+
+-- | Given the name of a field and a name of a type, it searches for the field
+-- in the types inheritance hierarchy. If successful, the type of the field is
+-- returned, otherwise, an error is generated.
+findField :: (MonadState TypeEnv m, MonadCompiler MessageContent m)
+          => AST.Ident -> AST.Type AST.ScopedName -> m TypeScheme
+findField fieldName startedTy = go Set.empty startedTy where
+  notFound = do
+        messageWithContext MessageError $ MessageFieldNotFound startedTy fieldName
+        return (TypeScheme [] unknownType AST.GetOrSet)
+  go visited ty
+    | Set.member ty visited = notFound
+    | otherwise = case ty of
+      AST.TypeGeneric n tyargs -> use (globalTypeMap . at n) >>= \case
+        Nothing -> notFound
+        Just scty -> case scty of
+          ScopedStruct ssig -> do
+            when (length (ssig ^. AST.structSigGenerics) /= length tyargs) $ messageWithContext MessageError $ MessageGenericTypeMismatch
+            -- substitute generic variables of *the structure*
+            let gensubst = Map.fromList $ zip (ssig ^. AST.structSigGenerics) tyargs
+            case findFieldSig fieldName (ssig ^. AST.structSigFields) of
+              Just (TypeScheme genvars ty acc) -> do
+                -- exempt shadowed generic variables of the field from the substitution
+                let gensubst' = foldr Map.delete gensubst genvars
+                return $ TypeScheme genvars (substituteGenerics gensubst' ty) acc
+              Nothing -> case ssig ^. AST.structSigSuper of -- try super structure
+                Nothing -> notFound
+                Just tySuper -> go (Set.insert ty visited) (substituteGenerics gensubst tySuper)
+      -- TODO: implement special logic for the ":CALL" and ":BIND" fields that are present on function types
+      AST.TypeFunction _ _ _ -> notFound
+
+-- | Searches for a field in a list of fields
+findFieldSig :: AST.Ident -> [AST.FieldSig AST.ScopedName] -> Maybe TypeScheme
+findFieldSig _ [] = Nothing
+findFieldSig fieldName (sig:sigs) = case sig of
+  AST.FieldFunSig fsig
+    | fsig ^. AST.funSigName == fieldName -> Just (funSigToTypeScheme fsig)
+  AST.FieldVarSig vsig
+    | vsig ^. AST.varSigName == fieldName -> Just (varSigToTypeScheme vsig)
+  AST.FieldIndexSig isig
+    | fieldName == "[]" -> Just (indexSigToTypeScheme isig)
+  _ -> findFieldSig fieldName sigs
+
+-- | Special type that will be used when the type checker is unable to infer the
+-- type, but it is desirable to continue the type checking process in order to first
+-- find as many errors as possible before showing them to the user.
+unknownType :: AST.Type AST.ScopedName
+unknownType = AST.TypeGeneric (AST.ScopedLocal "<unknown>") []
