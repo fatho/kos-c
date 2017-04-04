@@ -57,6 +57,8 @@ builtin structure Vessel : Orbitable {
   MessageQueue Messages get;
 }
 
+builtin Vessel Vessel(String name);
+
 List<Engine> ListEngines(Vessel vessel) {
   List<Engine> ret = List<Engine>();
   for(Part p : vessel.Parts) {
