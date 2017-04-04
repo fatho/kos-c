@@ -95,15 +95,18 @@ codeGen imports mainModule = evalStateT go initialState where
     }
 
   go = do
+    let mainName = AST.makeGlobalName mainModule "Main"
+    hasMain <- uses termDeclarations (Map.member mainName)
+    unless hasMain $ criticalWithContext MessageNoMain
     -- start code generation on main module
-    mainName <- generateIfRequired (AST.makeGlobalName mainModule "Main")
+    generatedMainName <- generateIfRequired mainName
     code <- use generatedCode
     -- order generated code by priorities
     prs <- use priorities
     let orderedCode = Map.mapKeys (\name -> Map.findWithDefault 0 name prs) code
         declCode = foldMap snd $ Map.toDescList orderedCode
     -- emit a call to the generated main function at the end of the script
-    return $ L.append declCode [qq|$mainName().|]
+    return $ L.append declCode [qq|$generatedMainName().|]
 
 -- | Generates a fresh name. Currently, it uses base 36 numbers prefixed with an underscore
 -- in order to make names as short as possible.

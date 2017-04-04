@@ -32,6 +32,7 @@ data MessageContent
   | MessageWrongAccessibility AST.Accessibility
   | MessageUninitializedIdentifiers [AST.Ident]
   | MessageCircularInheritance AST.ScopedName
+  | MessageNoMain
   deriving (Show)
 
 instance PP.Pretty MessageContent where
@@ -56,3 +57,4 @@ instance PP.Pretty MessageContent where
     AST.GetOrSet -> pretty "Expression must be both gettable and settable."
   pretty (MessageUninitializedIdentifiers args) = text "The following identifiers have not been initialized:" <+> text (intercalate ", " args)
   pretty (MessageCircularInheritance name) = text "Structure" <+> pretty name <+> text "has a circular inheritance hierarchy."
+  pretty (MessageNoMain) = text "Program has no 'Main' function."
