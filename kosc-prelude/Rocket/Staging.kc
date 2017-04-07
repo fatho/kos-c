@@ -21,7 +21,7 @@ Boolean() And(Boolean() a, Boolean() b) {
 
 // This returns true when staging is possible.
 Boolean CanStage() {
-  return Stage.Ready && Stage.Number > 0;
+  return CurrentStage.Ready && CurrentStage.Number > 0;
 }
 
 // Returns True if the available thrust drops to zero.

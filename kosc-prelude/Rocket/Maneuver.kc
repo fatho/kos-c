@@ -81,7 +81,7 @@ Void ExecuteNext(Scalar turnBufferTime = 90, Boolean() shouldStage = ShouldStage
 
     if (shouldStage()) {
       Print ("Staging.");
-      Stage;
+      Stage();
     }
 
     wait (0);

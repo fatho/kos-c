@@ -69,14 +69,14 @@ Void Launch(LaunchProfile ascent, Boolean() shouldStage = ShouldStageDefault) {
 
   lock Throttle = cthrottle;
   lock Steering = csteering;
-  Stage;
+  Stage();
 
   // 1. Go straight up until min speed and height are reached
   until (Ship.Altitude > ascent.minTurnAlt
     && Ship.AirSpeed > ascent.minTurnSpeed) {
       if (shouldStage()) {
         Print ("Staging.");
-        Stage;
+        Stage();
       }
       if (Ship.Altitude > launchAlt + 50) {
         csteering = Heading(launchAzimuth, 89.99);
@@ -98,7 +98,7 @@ Void Launch(LaunchProfile ascent, Boolean() shouldStage = ShouldStageDefault) {
   until (Ship.Orbit.Apoapsis >= targetApoapsis && Ship.Altitude >= turnStopAlt) {
     if ( shouldStage() ) {
       Print ("Staging.");
-      Stage;
+      Stage();
     }
     // compute current turn angle as an exponentially shaped curve w.r.t altitude
     // that reaches 45° at approximately 10km altitude
