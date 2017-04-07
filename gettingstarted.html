@@ -1,0 +1,375 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Getting Started &mdash; kOS-C 0.3.0.0 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="genindex.html"/>
+        <link rel="search" title="Search" href="search.html"/>
+    <link rel="top" title="kOS-C 0.3.0.0 documentation" href="index.html"/>
+        <link rel="next" title="Language Reference" href="language.html"/>
+        <link rel="prev" title="Installation" href="installation.html"/> 
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="index.html" class="icon icon-home"> kOS-C
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.3
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#step-1-creating-a-new-program">Step 1: Creating a new program</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#step-2-compiling-the-program">Step 2: Compiling the program</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#step-3-controlling-a-ship">Step 3: Controlling a ship</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="language.html">Language Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="prelude.html">Prelude Library</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compiler.html">Compiler</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">kOS-C</a>
+        
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html">Docs</a> &raquo;</li>
+        
+      <li>Getting Started</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/gettingstarted.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="getting-started">
+<h1>Getting Started<a class="headerlink" href="#getting-started" title="Permalink to this headline">¶</a></h1>
+<p>This quick start guide shows how to use the kOS-C compiler and how to write a
+basic script. You should have some knowledge about programming already, ideally
+in one of the languages that kOS-C is (loosely) based on. If you have not
+installed the kOS-C compiler yet, now is a good time to do that. See
+<a class="reference internal" href="installation.html#installation"><span class="std std-ref">Installation</span></a> for more information on that topic.</p>
+<div class="section" id="step-1-creating-a-new-program">
+<h2>Step 1: Creating a new program<a class="headerlink" href="#step-1-creating-a-new-program" title="Permalink to this headline">¶</a></h2>
+<p>Create a file called <code class="docutils literal"><span class="pre">Main.kc</span></code> in a directory of your choice. This module will
+serve as the main entry point of your program.</p>
+<p>Every kOS-C module begins with a module header indicating its name. In this
+case, the module&#8217;s name is <code class="docutils literal"><span class="pre">Main</span></code>, therefore you should start the file you
+just created with the following line.</p>
+<div class="highlight-c"><div class="highlight"><pre><span></span><span class="n">module</span> <span class="n">Main</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>The next part after the module header are import declarations, where we declare
+which other modules we may use. In kOS-C, even the most basic types and features
+are provided as a library. Therefore, any module usually contains at least one
+import declaration for the <code class="docutils literal"><span class="pre">KOS::Builtin</span></code> module defining the core of the
+language. We also import the <code class="docutils literal"><span class="pre">KOS::IO</span></code> module for printing text to the
+terminal.</p>
+<div class="highlight-c"><div class="highlight"><pre><span></span><span class="n">import</span> <span class="n">KOS</span><span class="o">::</span><span class="n">Builtin</span> <span class="n">unqualified</span><span class="p">;</span>
+<span class="n">import</span> <span class="n">KOS</span><span class="o">::</span><span class="n">IO</span> <span class="n">as</span> <span class="n">IO</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>The trailing <code class="docutils literal"><span class="pre">unqualified</span></code> instructs the compiler to insert the names declared
+in the imported module directly into the scope of the local module without
+requiring any qualifying prefixes. This corresponds to the <code class="docutils literal"><span class="pre">using</span> <span class="pre">namespace</span></code>
+directive in C++.</p>
+<p>The second import declarative uses the <code class="docutils literal"><span class="pre">as</span></code> syntax which provides the
+identifiers of <code class="docutils literal"><span class="pre">KOS::IO</span></code> under the shorter name <code class="docutils literal"><span class="pre">IO</span></code>.</p>
+<p>The last part that is mandatory in a program is the <code class="docutils literal"><span class="pre">Main</span></code> function, which
+provides the entry point of the generated program.</p>
+<div class="highlight-c"><div class="highlight"><pre><span></span><span class="n">Void</span> <span class="nf">Main</span><span class="p">()</span> <span class="p">{</span>
+  <span class="n">IO</span><span class="o">::</span><span class="n">Print</span><span class="p">(</span><span class="s">&quot;Hello, World!&quot;</span><span class="p">);</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>We have declared a function named <code class="docutils literal"><span class="pre">Main</span></code> with the return type <code class="docutils literal"><span class="pre">Void</span></code> taking
+no arguments. The <code class="docutils literal"><span class="pre">Void</span></code> type is defined in <code class="docutils literal"><span class="pre">KOS::Builtin</span></code> and due to the
+import declaration, the name is unqualified. In the function body, we are
+calling the function <code class="docutils literal"><span class="pre">Print</span></code> declared in the module <code class="docutils literal"><span class="pre">KOS::IO</span></code> which we have
+imported under the name <code class="docutils literal"><span class="pre">IO</span></code>. It takes a string as its only argument and
+prints it to the terminal. In fact, it corresponds directly to the <code class="docutils literal"><span class="pre">PRINT</span></code>
+statement in kOS scripts.</p>
+</div>
+<div class="section" id="step-2-compiling-the-program">
+<h2>Step 2: Compiling the program<a class="headerlink" href="#step-2-compiling-the-program" title="Permalink to this headline">¶</a></h2>
+<p>Our next step is to compile the program. The following instructions assume that
+the <code class="docutils literal"><span class="pre">koscc</span></code> executable is in a directory that is part of the system path.
+Otherwise, you are required to supply the full path to the executable in every
+command.</p>
+<p>An important thing to note is that the interface to the functionality that is
+natively provided by kOS is implemented in the <code class="docutils literal"><span class="pre">kosc-prelude</span></code> library that is
+shipped together with the kOS-C compiler. In the following commands,
+<code class="docutils literal"><span class="pre">&lt;kosc-path&gt;</span></code> refers to the directory where this library resides.</p>
+<p>Open a command prompt in the directory where you created the <code class="docutils literal"><span class="pre">Main.kc</span></code> file in
+the previous step and execute:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">koscc</span> <span class="o">-</span><span class="n">L</span> <span class="o">&lt;</span><span class="n">kosc</span><span class="o">-</span><span class="n">path</span><span class="o">&gt;/</span><span class="n">kosc</span><span class="o">-</span><span class="n">prelude</span> <span class="n">Main</span><span class="o">.</span><span class="n">kc</span>
+</pre></div>
+</div>
+<p>The compiler expects the path of the main module on the command line. Additional
+libraries can be made available by passing their path to the <code class="docutils literal"><span class="pre">-L</span></code> option. A
+list of all options can be printed by passing <code class="docutils literal"><span class="pre">--help</span></code> as an argument.</p>
+<p>Executing the above command should output the generated kOS script code on the
+terminal. It should look along the lines of:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">FUNCTION</span> <span class="n">_0</span> <span class="p">{</span>
+  <span class="n">Print</span><span class="p">(</span><span class="s2">&quot;Hello, World!&quot;</span><span class="p">)</span><span class="o">.</span>
+<span class="p">}</span>
+
+<span class="n">_0</span><span class="p">()</span><span class="o">.</span>
+</pre></div>
+</div>
+<p>As we can see, the compiler renamed our <code class="docutils literal"><span class="pre">Main</span></code> function while generating the
+code for it. This is the default behavior because storage space on the kOS CPU
+parts is usually quite scarce. Additionally, it allows different modules to
+contain functions with the same names.</p>
+<p>Since the <code class="docutils literal"><span class="pre">Main</span></code> function is the entry point of our program, the generated
+script ends with a call to the generated function.</p>
+<p>In most cases, it might be preferable to create a file with the generated code,
+instead of printing it to the terminal. We can use the <code class="docutils literal"><span class="pre">-o</span></code> option for
+specifying an output file:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">koscc</span> <span class="o">-</span><span class="n">L</span> <span class="o">&lt;</span><span class="n">kosc</span><span class="o">-</span><span class="n">path</span><span class="o">&gt;/</span><span class="n">kosc</span><span class="o">-</span><span class="n">prelude</span> <span class="o">-</span><span class="n">o</span> <span class="n">Main</span><span class="o">.</span><span class="n">ks</span> <span class="n">Main</span><span class="o">.</span><span class="n">kc</span>
+</pre></div>
+</div>
+<p>This command creates a file named <code class="docutils literal"><span class="pre">Main.ks</span></code> in the current directory. You can
+place this file into the kOS script folder and run it on a ship just like any
+other kOS script file.</p>
+</div>
+<div class="section" id="step-3-controlling-a-ship">
+<h2>Step 3: Controlling a ship<a class="headerlink" href="#step-3-controlling-a-ship" title="Permalink to this headline">¶</a></h2>
+<p>The following program steers a ship skywards at full throttle until it runs out
+of fuel. Then it waits until its close to the ground again before deploying the
+parachutes.</p>
+<div class="highlight-c"><div class="highlight"><pre><span></span><span class="n">module</span> <span class="n">Main</span><span class="p">;</span>
+
+<span class="n">import</span> <span class="n">KOS</span><span class="o">::</span><span class="n">Builtin</span> <span class="n">unqualified</span><span class="p">;</span>
+<span class="n">import</span> <span class="n">KOS</span><span class="o">::</span><span class="n">Cockpit</span> <span class="n">as</span> <span class="n">Cockpit</span><span class="p">;</span>
+<span class="n">import</span> <span class="n">KOS</span><span class="o">::</span><span class="n">Vessel</span> <span class="n">as</span> <span class="n">Vessel</span><span class="p">;</span>
+
+<span class="n">Void</span> <span class="nf">Main</span><span class="p">()</span> <span class="p">{</span>
+  <span class="n">lock</span> <span class="n">Cockpit</span><span class="o">::</span><span class="n">Throttle</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+  <span class="n">lock</span> <span class="n">Cockpit</span><span class="o">::</span><span class="n">Steering</span> <span class="o">=</span> <span class="n">Vessel</span><span class="o">::</span><span class="n">Ship</span><span class="p">.</span><span class="n">Up</span><span class="p">;</span>
+  <span class="n">Cockpit</span><span class="o">::</span><span class="n">Stage</span><span class="p">();</span>
+  <span class="n">wait</span> <span class="n">until</span> <span class="n">Vessel</span><span class="o">::</span><span class="n">Ship</span><span class="p">.</span><span class="n">AvailableThrust</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">;</span>
+  <span class="n">unlock</span> <span class="n">Cockpit</span><span class="o">::</span><span class="n">Throttle</span><span class="p">;</span>
+  <span class="n">lock</span> <span class="n">Cockpit</span><span class="o">::</span><span class="n">Steering</span> <span class="o">=</span> <span class="n">Vessel</span><span class="o">::</span><span class="n">Ship</span><span class="p">.</span><span class="n">SrfRetrograde</span><span class="p">;</span>
+  <span class="n">wait</span> <span class="n">until</span> <span class="n">Vessel</span><span class="o">::</span><span class="n">Ship</span><span class="p">.</span><span class="n">Altitude</span> <span class="o">&lt;</span> <span class="n">Vessel</span><span class="o">::</span><span class="n">Ship</span><span class="p">.</span><span class="n">GeoPosition</span><span class="p">.</span><span class="n">TerrainHeight</span> <span class="o">+</span> <span class="mi">1500</span><span class="p">;</span>
+  <span class="n">Cockpit</span><span class="o">::</span><span class="n">Chutes</span> <span class="o">=</span> <span class="n">True</span><span class="p">;</span>
+  <span class="n">unlock</span> <span class="n">all</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The main function starts by locking the throttle to 100% and the steering to the
+upwards direction of the ship. This corresponds directly to the
+<code class="docutils literal"><span class="pre">LOCK</span> <span class="pre">Throttle</span> <span class="pre">TO</span> <span class="pre">...</span></code> and <code class="docutils literal"><span class="pre">LOCK</span> <span class="pre">Steering</span> <span class="pre">TO</span> <span class="pre">...</span></code> directives used in kOS
+scripts, except that the identifiers are now declared in the module
+<code class="docutils literal"><span class="pre">KOS::Cockpit</span></code> and can therefore be accessed using a qualified name.</p>
+<p>Besides throttle and steering, the cockpit module provides variables for
+accessing all the knobs one would expect to find in the actual cockpit of a
+vessel. This includes action groups, SAS, brakes, etc.</p>
+<p>The following line activates the next stage. The current stage can be referred
+to by <code class="docutils literal"><span class="pre">KOS::Vessel::CurrentStage</span></code>.</p>
+<p>If you have created vessel with a suitable staging setup, it should be heading
+straight for the sky at this point.</p>
+<p>The next line is the kOS-C equivalent of the <code class="docutils literal"><span class="pre">WAIT</span> <span class="pre">UNTIL</span> <span class="pre">...</span> <span class="pre">.</span></code> kOS directive.
+As soon as the ship loses thrust, we unlock the throttle and lock the steering
+to the ship&#8217;s retrograde direction relative to the surface.</p>
+<p>Then we wait again until the vessel is 1500m above ground, at which point the
+parachutes are deployed and the steering is unlocked.</p>
+</div>
+</div>
+
+
+           </div>
+           <div class="articleComments">
+            
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="language.html" class="btn btn-neutral float-right" title="Language Reference" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="installation.html" class="btn btn-neutral" title="Installation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2017, Fabian Thorand.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'./',
+            VERSION:'0.3.0.0',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true,
+            SOURCELINK_SUFFIX: '.txt'
+        };
+    </script>
+      <script type="text/javascript" src="_static/jquery.js"></script>
+      <script type="text/javascript" src="_static/underscore.js"></script>
+      <script type="text/javascript" src="_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

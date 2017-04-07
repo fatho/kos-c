@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>How to build kOS-C &mdash; kOS-C 0.2.0.0 documentation</title>
+  <title>Prelude Library &mdash; kOS-C 0.3.0.0 documentation</title>
   
 
   
@@ -35,8 +35,9 @@
         <link rel="index" title="Index"
               href="genindex.html"/>
         <link rel="search" title="Search" href="search.html"/>
-    <link rel="top" title="kOS-C 0.2.0.0 documentation" href="index.html"/>
-        <link rel="prev" title="kOS-C: A Typed Language for kOS" href="index.html"/> 
+    <link rel="top" title="kOS-C 0.3.0.0 documentation" href="index.html"/>
+        <link rel="next" title="Compiler" href="compiler.html"/>
+        <link rel="prev" title="Language Reference" href="language.html"/> 
 
   
   <script src="_static/js/modernizr.min.js"></script>
@@ -65,7 +66,7 @@
             
             
               <div class="version">
-                0.2
+                0.3
               </div>
             
           
@@ -89,9 +90,12 @@
               
             
             
-              <p class="caption"><span class="caption-text">Contents:</span></p>
-<ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="#">How to build kOS-C</a></li>
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gettingstarted.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="language.html">Language Reference</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Prelude Library</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compiler.html">Compiler</a></li>
 </ul>
 
             
@@ -136,13 +140,13 @@
     
       <li><a href="index.html">Docs</a> &raquo;</li>
         
-      <li>How to build kOS-C</li>
+      <li>Prelude Library</li>
     
     
       <li class="wy-breadcrumbs-aside">
         
             
-            <a href="_sources/building.rst.txt" rel="nofollow"> View page source</a>
+            <a href="_sources/prelude.rst.txt" rel="nofollow"> View page source</a>
           
         
       </li>
@@ -155,8 +159,27 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="how-to-build-kos-c">
-<span id="buildinstructions"></span><h1>How to build kOS-C<a class="headerlink" href="#how-to-build-kos-c" title="Permalink to this headline">¶</a></h1>
+  <div class="section" id="prelude-library">
+<h1>Prelude Library<a class="headerlink" href="#prelude-library" title="Permalink to this headline">¶</a></h1>
+<div class="admonition-todo admonition" id="index-0">
+<p class="first admonition-title">Todo</p>
+<p class="last">This page is a stub. It is supposed to document the modules in the
+<code class="docutils literal"><span class="pre">kosc-prelude</span></code> library.</p>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">In general, the kOS-C prelude replicates the structure hierarchy and
+variable names used by kOS in order to allow for a smooth transition.
+There are a few exceptions in cases where peculiarities of the kOS
+scripting language cannot be modeled 1:1 in kOS-C due to restrictions
+in the syntax or static checking. Examples are the <code class="docutils literal"><span class="pre">PrintAt</span></code>
+function that wraps the <code class="docutils literal"><span class="pre">PRINT</span> <span class="pre">...</span> <span class="pre">AT</span> <span class="pre">(x,</span> <span class="pre">y).</span></code> syntax used in kOS
+scripts and the name <code class="docutils literal"><span class="pre">CurrentStage</span></code> for referring to the current
+stage (just <code class="docutils literal"><span class="pre">Stage</span></code> in kOS). The latter is because kOS-C does not
+allow to use the same name for different things, whereas in kOS
+scripts, <code class="docutils literal"><span class="pre">Stage</span></code> either refers to a variable holding information
+about the current stage, or to the staging command (as in <code class="docutils literal"><span class="pre">Stage.</span></code>).</p>
+</div>
 </div>
 
 
@@ -169,8 +192,10 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
+        <a href="compiler.html" class="btn btn-neutral float-right" title="Compiler" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
-        <a href="index.html" class="btn btn-neutral" title="kOS-C: A Typed Language for kOS" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+        <a href="language.html" class="btn btn-neutral" title="Language Reference" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   
@@ -201,7 +226,7 @@
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'./',
-            VERSION:'0.2.0.0',
+            VERSION:'0.3.0.0',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'.html',
             HAS_SOURCE:  true,
