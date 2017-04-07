@@ -11,12 +11,9 @@ import           Control.Lens
 import           Control.Monad.Except
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Data.Maybe
 import           Data.Monoid
 
 import           Text.PrettyPrint.ANSI.Leijen as PP hiding ((<$>), (<>))
-
-import qualified KOSC.Language.AST            as AST
 
 -- * Compiler Errors
 
@@ -33,8 +30,7 @@ data CompilerMessage a = CompilerMessage
 
 -- | The context that is passed as an environment through the compiler
 data CompilerContext = CompilerContext
-  { _compilerContextModule :: Maybe AST.ModuleName -- ^ the module that the compiler is currently working on
-  , _compilerContextDecl   :: [AST.Ident]          -- ^ the declarations that the compiler is currently working on
+  { _compilerContext :: [PP.Doc] -- ^ the stack of things the compiler is currently working on
   }
 
 data CompilerState a = CompilerState
@@ -51,7 +47,7 @@ makeLenses ''CompilerState
 
 runCompilerT :: Monad m => CompilerT e m a -> m (Either (CompilerMessage e) a, [CompilerMessage e])
 runCompilerT compiler = over _2 _compilerStateMessages <$> runStateT (runExceptT (runReaderT (runCompilerT' compiler) emptyContext)) emptyState where
-  emptyContext = CompilerContext Nothing []
+  emptyContext = CompilerContext []
   emptyState = CompilerState []
 
 class Monad m => MonadCompiler e m | m -> e where
@@ -73,12 +69,10 @@ class Monad m => MonadCompiler e m | m -> e where
 
   -- | Locally modifies the context.
   localContext :: (CompilerContext -> CompilerContext) -> m a -> m a
+
   -- | Makes the current module known to sub-computations.
-  enterModule :: AST.ModuleName -> m a -> m a
-  enterModule modName inModule = localContext (compilerContextModule .~ Just modName) inModule
-  -- | Makes the current declaration known to sub-computations
-  enterDecl :: AST.Ident -> m a -> m a
-  enterDecl ident inModule = localContext (compilerContextDecl %~ (:) ident) inModule
+  pushContext :: PP.Doc -> m a -> m a
+  pushContext ctx inModule = localContext (compilerContext %~ (ctx:)) inModule
 
 instance Monad m => MonadCompiler e (CompilerT e m) where
   criticalWithContext msg = CompilerT $ ask >>= \ctx -> throwError (CompilerMessage MessageError ctx msg)
@@ -107,13 +101,7 @@ instance MonadCompiler e m => MonadCompiler e (StateT s m) where
 
 instance PP.Pretty e => PP.Pretty (CompilerMessage e) where
   pretty err = pretty (err ^. messageType) <> colon <+> pretty (err ^. messageContent) PP.<$$>
-    indent 2 (vcat extraInfo) where
-
-    extraInfo = maybeToList (modInfo <$> view (messageContext . compilerContextModule) err)
-                ++ map declInfo (view (messageContext . compilerContextDecl) err)
-
-    modInfo m = text "In module:" <+> pretty m
-    declInfo d = text "In declaration:" <+> text d
+    indent 2 (vcat $ err ^. messageContext . compilerContext)
 
 instance Pretty MessageType where
   pretty MessageError   = text "Error"

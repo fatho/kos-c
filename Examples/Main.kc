@@ -13,7 +13,7 @@ import Rocket::Launch as Launch;
 import Rocket::Maneuver as Maneuver;
 
 Void Main() {
-
+  PrintAt("Hello World", 0, 0);
   Launch::Launch(Launch::KerbinAscent);
   // Don't forget the solar panels
   Panels = True;

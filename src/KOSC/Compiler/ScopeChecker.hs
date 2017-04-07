@@ -195,6 +195,10 @@ scopeChecker imports inputMod = initialScope >>= evalStateT checkedMod where
   checkStmt (AST.SUnlock var) = AST.SUnlock <$> traverse checkTermName var
   checkStmt (AST.SOn cond body) = AST.SOn <$> globalScope (checkExpr cond) <*> traverse checkStmt body
   checkStmt (AST.SWhen cond body) = AST.SWhen <$> globalScope (checkExpr cond) <*> traverse checkStmt body
+  checkStmt (AST.SRaw (AST.RawCode rawParts)) = AST.SRaw . AST.RawCode <$> traverse checkRawCodePart rawParts
+
+  checkRawCodePart (AST.RawCodeText txt) = pure $ AST.RawCodeText txt
+  checkRawCodePart (AST.RawCodeName name) = AST.RawCodeName <$> checkTermName name
 
   checkBuiltin (AST.BuiltinStruct ssig) = AST.BuiltinStruct <$> checkStructSig ssig
   checkBuiltin (AST.BuiltinFun fsig) = AST.BuiltinFun <$> checkFunSig fsig

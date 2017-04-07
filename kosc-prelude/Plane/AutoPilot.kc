@@ -406,7 +406,6 @@ Void UpdateLanding() {
     Ship.Control.MainThrottle = 0;
     UpdateFlyByWireB();
     if(Ship.Status == "LANDED") {
-      lock WheelSteering = Heading(landingHeading);
       Brakes = True;
       WantPitch = 0;
       landingState = 4;
@@ -417,7 +416,6 @@ Void UpdateLanding() {
     Ship.Control.MainThrottle = 0;
     UpdateFlyByWireA();
     if(Ship.GroundSpeed < 1) {
-      unlock WheelSteering;
       Print("Landed");
       PilotState = StateLanded;
     }

@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
 module KOSC.Language.Parser where
 
 import           Control.Applicative
@@ -11,6 +12,7 @@ import qualified Text.Parser.Token.Highlight as H
 import           Text.Parser.Token.Style
 import           Text.Trifecta
 import           Text.Trifecta.Delta
+import qualified Data.Text as T
 
 import           KOSC.Language.AST
 
@@ -32,7 +34,7 @@ varStyle = IdentifierStyle
                 [ "return", "record", "module", "import", "as"
                 , "unqualified", "builtin", "structure", "get", "set"
                 , "until", "if", "else", "for", "cast", "break", "lock"
-                , "unlock", "on", "when", "wait", "all" ]
+                , "unlock", "on", "when", "wait", "all", "__kos" ]
             , _styleHighlight = H.Identifier
             , _styleReservedHighlight = H.ReservedIdentifier
             }
@@ -64,11 +66,11 @@ unOpSym o = case o of
   UnOpNot    -> "!"
 
 -- | Parses a variable identifier.
-rawNameP :: KOSCParser RawName
+rawNameP :: (TokenParsing m, Monad m) => m RawName
 rawNameP = RawName <$> sepBy1 (ident varStyle) (symbol "::")
 
 -- | Parses a reserved identifier.
-reserved ::  String -> KOSCParser ()
+reserved :: (TokenParsing m, Monad m) => String -> m ()
 reserved = reserve varStyle
 
 -- | Parses a reserved operator.
@@ -138,7 +140,7 @@ testExpr str = case parseString (runKOSCParser $ exprP <* eof) mempty str of
 -- * Statement Parser
 
 stmtP :: KOSCParser (Stmt RawName)
-stmtP = choice [stmtIfP, stmtUntilP, stmtForEachP, stmtOnP, stmtWhenP] <|>
+stmtP = choice [stmtIfP, stmtUntilP, stmtForEachP, stmtOnP, stmtWhenP, stmtRawP] <|>
   (choice [stmtReturnP, stmtBreakP, stmtLockP, stmtUnlockP, try stmtWaitUntilP, stmtWaitP, try stmtDeclP, try stmtAssignP, stmtExprP] <* semi) <|> stmtBlockP
 
 stmtDeclP :: KOSCParser (Stmt RawName)
@@ -199,6 +201,18 @@ stmtOnP = SOn <$ reserved "on" <*> parens exprP <*> stmtsP
 
 stmtWhenP :: KOSCParser (Stmt RawName)
 stmtWhenP = SWhen <$ reserved "when" <*> parens exprP <*> stmtsP
+
+stmtRawP :: KOSCParser (Stmt RawName)
+stmtRawP = SRaw <$ reserved "__kos" <* symbol "[|" <*> rawCodeP <* symbol "|]"
+
+rawCodeP :: KOSCParser (RawCode RawName)
+rawCodeP = runUnspaced $ RawCode <$> many rawCodePartP
+
+rawCodePartP :: Unspaced KOSCParser (RawCodePart RawName)
+rawCodePartP = escapedIdent <|> code where
+  escapedIdent = RawCodeName <$ char '$' <*> rawNameP
+  code = RawCodeText <$> (T.pack <$> some (noneOf "$|") <|> text "$$" <|> vertBar)
+  vertBar = try $ text "|" <* notFollowedBy (char ']')
 
 testStmt :: String -> (Stmt RawName)
 testStmt str = case parseString (runKOSCParser $ stmtP <* eof) mempty str of

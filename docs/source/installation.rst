@@ -10,7 +10,7 @@ The latest binary releases of the **kOS-C** compiler for Windows and Linux can
 be obtained from the `GitHub repository
 <https://github.com/fatho/kos-c/releases/latest>`__. The zip files contain the
 compiler binary itself as well as a "prelude" library that contains the bindings
-to kOS and some commonly functionality that might be useful.
+to kOS and some common functionality that might be useful.
 
 Be aware that the Linux binaries are compiled on Arch Linux and might not work
 on other distributions. Moreover, I can only provide 64 bit builds at the
@@ -55,8 +55,8 @@ the following steps need to be done.
      ``~/.local/bin``, on Windows ``%APPDATA%\local\bin``.
 
    * Another option is to use the command ``stack exec koscc`` to run the
-     generated executable. Any arguments that are meant for **kOS-C** must be
-     separated with two dashes (``--``) from the rest of the command line, i.e.
-     ``stack exec koscc -- arguments go here``.
+     generated executable from within the project directory. Any arguments that
+     are meant for **kOS-C** must be separated with two dashes (``--``) from the
+     rest of the command line, i.e. ``stack exec koscc -- arguments go here``.
 
 .. [#ghc] `The Glasgow Haskell Compiler <https://www.haskell.org/ghc/>`__

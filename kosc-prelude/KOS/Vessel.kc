@@ -199,4 +199,4 @@ builtin structure Stage {
   Lexicon<String, AggregateResource> ResourcesLex get;
 }
 
-builtin Stage Stage;
+builtin Stage CurrentStage "Stage";

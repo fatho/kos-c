@@ -8,7 +8,6 @@ module KOSC.Compiler.CodeGen where
 
 import           Control.Lens
 import           Control.Monad.State
-import           Data.Foldable
 import           Data.List
 import           Data.Map.Strict               (Map)
 import qualified Data.Map.Strict               as Map
@@ -28,6 +27,8 @@ type GeneratedName = L.Text
 -- | Type of generated code.
 type GeneratedCode = L.Text
 
+type GlobalName = [AST.Ident]
+
 -- | Possible declarations for things that are types
 data TypeDecl
   = Record (AST.RecDecl AST.ScopedName) -- ^ the type is a record
@@ -42,15 +43,17 @@ data TermDecl
 
 -- | Internal state of the code generator.
 data CodeGenState = CodeGenState
-  { _generatedNames   :: Map AST.ScopedName GeneratedName
-  -- ^ Mapping from scoped names (source) to generated names (target). This is used for the renaming feature.
+  { _generatedNames   :: Map GlobalName GeneratedName
+  -- ^ Mapping from global names (source) to generated names (target). This is also used for making sure every declaration is just created once.
+  , _generatedLocalNames :: Map AST.Ident GeneratedName
+  -- ^ Mapping from local names to generated names.
   , _typeDeclarations :: Map AST.ScopedName TypeDecl
   -- ^ Type declarations of all imported modules. When dealing with records, we need to inspect the type of the things that are accessed.
   , _termDeclarations :: Map AST.ScopedName TermDecl
   -- ^ Term level declarations (i.e. global functions and variables) of all imported modules.
-  , _generatedCode    :: Map AST.ScopedName L.Text
+  , _generatedCode    :: Map GlobalName L.Text
   -- ^ Mapping from top-level entities (functions or vars so far) to the code that has been generated for them (if any).
-  , _priorities       :: Map AST.ScopedName Integer
+  , _priorities       :: Map GlobalName Integer
   -- ^ Mapping from top-level entities (functions or vars so far) to a priority indicating their position in the generated file.
   , _fresh            :: Integer
   -- ^ Used for generating fresh names.
@@ -85,6 +88,7 @@ codeGen imports mainModule = evalStateT go initialState where
 
   initialState = CodeGenState
     { _generatedNames = Map.empty
+    , _generatedLocalNames = Map.empty
     -- throw together all declarations from all imported modules
     , _typeDeclarations = foldOf (folded . scopedModuleAST . to (exportDecls exportTypeDecl) ) imports
     , _termDeclarations = foldOf (folded . scopedModuleAST . to (exportDecls exportTermDecl) ) imports
@@ -99,7 +103,7 @@ codeGen imports mainModule = evalStateT go initialState where
     hasMain <- uses termDeclarations (Map.member mainName)
     unless hasMain $ criticalWithContext MessageNoMain
     -- start code generation on main module
-    generatedMainName <- generateIfRequired mainName
+    generatedMainName <- generateName mainName
     code <- use generatedCode
     -- order generated code by priorities
     prs <- use priorities
@@ -121,14 +125,14 @@ nextPriority = priority <<+= 1
 -- | Generates the entity referred to by the scoped name, if it has not yet been generated.
 -- Returns the generated name of the requested entity.
 -- This is the core of the lazy code generation. If a name is never requested, it will never generate code for its definition.
-generateIfRequired :: Monad m => AST.ScopedName -> CodeGenM m GeneratedName
+generateIfRequired :: Monad m => [AST.Ident] -> CodeGenM m GeneratedName
 generateIfRequired sname = use (generatedNames . at sname) >>= \case
   Just genName -> return genName -- we already generated that
-  Nothing -> do
+  Nothing -> globalScope $ do
     -- assign next priority number for this thing
     nextP <- nextPriority
     priorities . at sname .= Just nextP
-    use (termDeclarations . at sname) >>= \case
+    use (termDeclarations . at (AST.ScopedGlobal sname)) >>= \case
       Nothing -> criticalWithContext $ MessageUnspecified $ PP.text "Undeclared identifier found in code generator. This is a bug."
       Just td -> case td of
         Fun fdef -> do
@@ -158,9 +162,16 @@ generateIfRequired sname = use (generatedNames . at sname) >>= \case
 
 -- | Generates code for a name. Local variables are returned as-is, global variables might trigger further code generation.
 generateName :: Monad m => AST.ScopedName -> CodeGenM m GeneratedName
-generateName (AST.ScopedLocal l) = return $ L.pack l
-generateName g@(AST.ScopedGlobal _) = generateIfRequired g
+generateName (AST.ScopedLocal l) = uses generatedLocalNames (Map.findWithDefault (L.pack l) l)
+generateName (AST.ScopedGlobal g) = generateIfRequired g
 generateName (AST.ScopedAmbiguous _) = criticalWithContext $ MessageUnspecified "Encountered ambiguous name in code generator. This is a bug."
+
+-- | Assigns a new generated name to a local variable
+newLocalName :: Monad m => AST.Ident -> CodeGenM m GeneratedName
+newLocalName var = do
+  newName <- freshName
+  generatedLocalNames . at var .= Just newName
+  return newName
 
 -- | Generates code for an expression.
 generateExpression :: Monad m => AST.Expr AST.ScopedName -> CodeGenM m GeneratedCode
@@ -274,8 +285,9 @@ generateStatements stmts = L.concat <$> traverse generateStatement stmts
 generateStatement :: Monad m => AST.Stmt AST.ScopedName -> CodeGenM m GeneratedCode
 generateStatement s = case s of
   AST.SDeclVar _ name init -> do
+    genname <- newLocalName name
     icode <- generateExpression init
-    return $ [qq|LOCAL $name IS $icode.$ln|]
+    return $ [qq|LOCAL $genname IS $icode.$ln|]
   AST.SAssign lhs rhs -> do
     lcode <- generateExpression lhs
     rcode <- generateExpression rhs
@@ -287,22 +299,23 @@ generateStatement s = case s of
     code <- generateExpression e
     return $ [qq|$code.$ln|]
   AST.SBlock stmts -> do
-    code <- generateStatements stmts
+    code <- nestedScope $ generateStatements stmts
     return [qq|\{$code\}$ln|]
   AST.SIf cond sthen selse -> do
-    tcode <- generateStatements sthen
-    ecode <- generateStatements selse
     ccode <- generateExpression cond
+    tcode <- nestedScope $ generateStatements sthen
+    ecode <- nestedScope $ generateStatements selse
     let elsePart = if null selse then ln else [qq| else \{$ln$ecode\}$ln|]
     return $ [qq|if $ccode \{$ln $tcode \}$elsePart|]
   AST.SUntil cond body -> do
-    bcode <- generateStatements body
+    bcode <- nestedScope $ generateStatements body
     ccode <- generateExpression cond
     return [qq|until $ccode \{$ln$bcode\}$ln|]
   AST.SForEach _ name expr body -> do
+    genname <- newLocalName name
     ecode <- generateExpression expr
-    bcode <- generateStatements body
-    return [qq|for $name in $ecode \{$ln$bcode\}$ln|]
+    bcode <- nestedScope $ generateStatements body
+    return [qq|for $genname in $ecode \{$ln$bcode\}$ln|]
   AST.SBreak -> return "break.\n"
   AST.SLock var expr -> do
     name <- generateName var
@@ -320,12 +333,17 @@ generateStatement s = case s of
     return [qq|wait until $ccode.$ln|]
   AST.SOn change body -> do
     ccode <- generateExpression change
-    bcode <- generateStatements body
+    bcode <- nestedScope $ generateStatements body
     return [qq|on $ccode \{$ln$bcode\}$ln|]
   AST.SWhen cond body -> do
     ccode <- generateExpression cond
-    bcode <- generateStatements body
+    bcode <- nestedScope $ generateStatements body
     return [qq|when $ccode then \{$ln$bcode\}$ln|]
+  AST.SRaw (AST.RawCode parts) -> do
+    parts <- forM parts $ \case
+      AST.RawCodeText txt -> pure (L.fromStrict txt)
+      AST.RawCodeName name -> generateName name
+    return $ L.concat parts
 
 -- | Generates code for a function declaration.
 generateFunction :: Monad m => GeneratedName -> AST.FunDecl AST.ScopedName -> CodeGenM m L.Text
@@ -337,12 +355,13 @@ generateFunction actualName decl = do
 -- | Generates for a function body. This is used for both lambda functions and actual declarations.
 generateFunctionBody :: Monad m => [AST.Param AST.ScopedName] -> [AST.Stmt AST.ScopedName] -> CodeGenM m L.Text
 generateFunctionBody params stmts = do
-  let param (AST.Param _ name Nothing) = return $ L.pack name
+  let param (AST.Param _ name Nothing) = newLocalName name
       param (AST.Param _ name (Just e)) = do
+        genname <- newLocalName name
         ecode <- generateExpression e
-        return [qq|$name IS $ecode|]
+        return [qq|$genname IS $ecode|]
   pcode <- mapM param params
-  body <- generateStatements stmts
+  body <- nestedScope $ generateStatements stmts
   let paramDecl = if null pcode then L.empty else [qq|PARAMETER {L.intercalate "," pcode}.$ln|]
       code = [qq|\{$ln$paramDecl$body\}$ln|]
   return code
@@ -350,8 +369,26 @@ generateFunctionBody params stmts = do
 -- | Generates a global variable.
 generateVar :: Monad m => GeneratedName -> AST.VarDecl AST.ScopedName -> CodeGenM m L.Text
 generateVar actualName decl = do
-  icode <- generateExpression (decl ^. AST.varDeclInitializer)
+  icode <- nestedScope $ generateExpression (decl ^. AST.varDeclInitializer)
   return [qq|DECLARE GLOBAL $actualName TO $icode.$ln|]
+
+-- | Temporarily switches into global scope for processing the nested action.
+-- This resets all fields of the state holding information that is specific to a
+-- local scope. The local state is restored after the nested operation has
+-- finished.
+globalScope :: Monad m => CodeGenM m a -> CodeGenM m a
+globalScope nested = nestedScope $ do
+  generatedLocalNames .= Map.empty
+  nested
+
+-- | Creates a new scope nesting level. All modifications to the local scope
+-- performed by the nested action are undone after it has finished.
+nestedScope :: Monad m => CodeGenM m a -> CodeGenM m a
+nestedScope nested = do
+  locNames <- use generatedLocalNames
+  r <- nested
+  generatedLocalNames .= locNames
+  return r
 
 -- | Converts a number to a valid name by displaying it in base 36 and prefixing it with an underscore.
 nameBase36 :: Integer -> GeneratedName
