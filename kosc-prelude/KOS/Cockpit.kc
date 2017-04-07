@@ -9,6 +9,12 @@ builtin Scalar Throttle;
 builtin Direction Steering;
 builtin Scalar WheelSteering;
 
+//// Staging
+
+Void Stage() {
+  __kos [| STAGE. |]
+}
+
 //// ACTION GROUPS
 
 builtin Boolean RCS;
@@ -32,6 +38,8 @@ builtin Boolean AG8;
 builtin Boolean AG9;
 builtin Boolean AG10;
 
+//// KOS "fake" Action groups
+
 builtin Boolean Legs;
 builtin Boolean Chutes;
 builtin Boolean ChutesSafe;
@@ -45,10 +53,12 @@ builtin Boolean FuelCells;
 builtin Boolean ISRU;
 builtin Boolean Intakes;
 
-builtin private String Target;
+//// Targets
 
-Void SetTargetName(String tgt) {
-  Target = tgt;
+builtin private Structure TargetImpl "Target";
+
+Void SetTargetByName(String tgt) {
+  TargetImpl = tgt;
 }
 // TODO: uncomment target setters and getters
 /*
@@ -74,4 +84,5 @@ Body GetTargetBody() {
 
 Part GetTargetPart() {
   return cast<Part>(Target);
-}*/
+}
+*/
