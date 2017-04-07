@@ -203,7 +203,7 @@ instance PP.Pretty RawName where
 
 -- | The semigroup instance implements precedence and ambiguity rules of name scoping.
 instance Semigroup ScopedName where
-  _ <> loc@(ScopedLocal _) = loc -- ^ local variable always wins name resolution, last defined shadows previous definitions
+  _ <> loc@(ScopedLocal _) = loc -- local variable always wins name resolution, last defined shadows previous definitions
   loc@(ScopedLocal _) <> _ = loc
   (ScopedGlobal g) <> (ScopedGlobal g') = if g == g' then ScopedGlobal g else ScopedAmbiguous [g, g']
   (ScopedAmbiguous a) <> (ScopedGlobal g) = ScopedAmbiguous (g : a)
