@@ -12,6 +12,7 @@ category:            Web
 build-type:          Simple
 extra-source-files:  README.md
 data-files:          kosc-prelude/KOS/*.kc
+data-files:          kosc-prelude/KOS/Vessel/*.kc
                      kosc-prelude/Rocket/*.kc
                      kosc-prelude/Plane/*.kc
                      kosc-prelude/*.kc
@@ -64,6 +65,10 @@ test-suite kos-c-test
   hs-source-dirs:      test
   main-is:             Spec.hs
   build-depends:       base
+                     , hspec
+                     , filepath
+                     , directory
+                     , ansi-wl-pprint
                      , kos-c
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
