@@ -7,5 +7,5 @@ builtin Void Print(String str);
 builtin Void ClearScreen;
 
 Void PrintAt(String str, Scalar x, Scalar y) {
-  __kos [| PRINT str AT ($x, $y). |]
+  __kos [| PRINT $str AT ($x, $y). |]
 }
