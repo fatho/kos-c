@@ -8,7 +8,6 @@ module KOSC.Compiler.CodeGen where
 
 import           Control.Lens
 import           Control.Monad.State
-import           Data.Foldable
 import           Data.List
 import           Data.Map.Strict               (Map)
 import qualified Data.Map.Strict               as Map
@@ -326,6 +325,11 @@ generateStatement s = case s of
     ccode <- generateExpression cond
     bcode <- generateStatements body
     return [qq|when $ccode then \{$ln$bcode\}$ln|]
+  AST.SRaw (AST.RawCode parts) -> do
+    parts <- forM parts $ \case
+      AST.RawCodeText txt -> pure (L.fromStrict txt)
+      AST.RawCodeName name -> generateName name
+    return $ L.concat parts
 
 -- | Generates code for a function declaration.
 generateFunction :: Monad m => GeneratedName -> AST.FunDecl AST.ScopedName -> CodeGenM m L.Text

@@ -237,6 +237,7 @@ typeChecker imports inputMod = evalStateT checkModule initialEnv where
     (cond', condTy) <- inferExpr cond
     requireType (TypeScheme [] boolType AST.Get) condTy
     AST.SWhen cond' <$> enterScope (requiredReturnType .= Just (TypeScheme [] boolType AST.Get) >> traverse checkStmt body)
+  checkStmt s@(AST.SRaw _) = pure s -- cannot check raw code, we must hope that the programmer knows what he's doing.
 
   checkFunSig (AST.FunSig vis ret name gens params outName) = do
     params' <- forM params $ \p@(AST.Param ty name expr) -> case expr of

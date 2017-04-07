@@ -5,6 +5,7 @@ import           Control.Lens
 import           Data.List
 import           Data.Semigroup
 import qualified Text.PrettyPrint.ANSI.Leijen as PP
+import qualified Data.Text as T
 
 -- * AST
 
@@ -168,7 +169,17 @@ data Stmt name
   | SUnlock (Maybe name)
   | SOn (Expr name) [Stmt name]
   | SWhen (Expr name) [Stmt name]
+  | SRaw (RawCode name) -- ^ embedded raw kOS script code that can make use of identifiers declared in kOS-C
   deriving (Read, Show)
+
+-- | Represents raw kOS script code referencing kOS-C identifiers
+data RawCode name = RawCode [RawCodePart name] deriving (Read, Show, Eq, Ord)
+
+-- | Part of raw kOS script code.
+data RawCodePart name
+  = RawCodeText T.Text -- ^ raw text
+  | RawCodeName name -- ^ kOS-C identifier
+  deriving (Read, Show, Eq, Ord)
 
 -- * Lenses
 
