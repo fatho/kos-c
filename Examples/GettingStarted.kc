@@ -1,0 +1,18 @@
+module GettingStarted;
+
+import KOS::Builtin unqualified;
+import KOS::Cockpit as Cockpit;
+import KOS::Vessel as Vessel;
+
+Void Main() {
+     // full throttle, steering upwards
+     lock Cockpit::Throttle = 1;
+     lock Cockpit::Steering = Vessel::Ship.Up;
+     Cockpit::Stage();
+     wait until Vessel::Ship.AvailableThrust < 1;
+     unlock Cockpit::Throttle;
+     lock Cockpit::Steering = Vessel::Ship.SrfRetrograde;
+     wait until Vessel::Ship.Altitude < Vessel::Ship.GeoPosition.TerrainHeight + 1500;
+     Cockpit::Chutes = True;
+     unlock all;
+}

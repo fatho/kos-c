@@ -5,7 +5,11 @@ kOS-C: A Typed Language for kOS
    :maxdepth: 2
    :hidden:
 
-   Installation <installation>
+   installation
+   gettingstarted
+   language
+   prelude
+   compiler
 
 Welcome to the documentation of **kOS-C**, a typed language for the `Kerbal
 Operating System`__ (kOS) mod for Kerbal Space Program. This project is an
