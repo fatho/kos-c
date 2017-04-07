@@ -66,11 +66,11 @@ unOpSym o = case o of
   UnOpNot    -> "!"
 
 -- | Parses a variable identifier.
-rawNameP :: KOSCParser RawName
+rawNameP :: (TokenParsing m, Monad m) => m RawName
 rawNameP = RawName <$> sepBy1 (ident varStyle) (symbol "::")
 
 -- | Parses a reserved identifier.
-reserved ::  String -> KOSCParser ()
+reserved :: (TokenParsing m, Monad m) => String -> m ()
 reserved = reserve varStyle
 
 -- | Parses a reserved operator.
@@ -206,9 +206,9 @@ stmtRawP :: KOSCParser (Stmt RawName)
 stmtRawP = SRaw <$ reserved "__kos" <* symbol "[|" <*> rawCodeP <* symbol "|]"
 
 rawCodeP :: KOSCParser (RawCode RawName)
-rawCodeP = RawCode <$> many rawCodePartP
+rawCodeP = runUnspaced $ RawCode <$> many rawCodePartP
 
-rawCodePartP :: KOSCParser (RawCodePart RawName)
+rawCodePartP :: Unspaced KOSCParser (RawCodePart RawName)
 rawCodePartP = escapedIdent <|> code where
   escapedIdent = RawCodeName <$ char '$' <*> rawNameP
   code = RawCodeText <$> (T.pack <$> some (noneOf "$|") <|> text "$$" <|> vertBar)
